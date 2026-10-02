@@ -1,0 +1,159 @@
+<meta charset="utf-8">
+<!-- The Pipeline — Switches All the Way Down, Chapter 21 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1220px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--violet)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:230px 1fr 70px;gap:10px;align-items:center;margin:4px 0}
+.sl input{accent-color:var(--pink)} .sl b{font-family:"JetBrains Mono",monospace;color:var(--orange);text-align:right}
+textarea{width:100%;height:150px;font-family:"JetBrains Mono",monospace;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#FAFBFE}
+canvas{display:block}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:22px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--soft);margin-top:8px}
+.legend span i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+.note{background:#EEE8FB;border:1px solid #D3C4F3;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+.err{color:var(--red);font-size:13px}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>The <span>pipeline</span></h1>
+  <p>A processor does not finish one instruction before starting the next; it overlaps them like an assembly line. That works beautifully until one instruction needs another’s answer, or until a branch makes the processor guess wrong. Each row below is one instruction; each column is one clock cycle.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar" style="margin-bottom:8px"><span style="color:var(--soft)">Program:</span><span id="presets"></span></div>
+    <textarea id="prog" spellcheck="false" aria-label="Program"></textarea>
+    <div class="err" id="err"></div>
+    <div class="bar" style="margin:8px 0"><button class="btn" id="fwd">Forwarding: off</button><button class="btn" id="pred">Branch prediction: off</button></div>
+    <div class="sl"><span>Branch goes the predicted way</span><input type="range" id="pr" min="50" max="100" value="90"><b id="prv"></b></div>
+    <div class="sl"><span>Pipeline depth (stages)</span><input type="range" id="depth" min="5" max="20" value="5"><b id="dv"></b></div>
+    <div class="sl"><span>Run the program this many times</span><input type="range" id="reps" min="1" max="8" value="1"><b id="rv"></b></div>
+  </section>
+  <section class="card"><div class="scroll"><canvas id="diag"></canvas></div>
+    <div class="legend"><span><i style="background:#0090C8"></i>fetch</span><span><i style="background:#7A4FE0"></i>decode</span><span><i style="background:#E8620A"></i>execute</span><span><i style="background:#E8A400"></i>memory</span><span><i style="background:#12A66E"></i>write-back</span><span><i style="background:#C9CDDA"></i>stalled (bubble)</span><span><i style="background:#E23A3A"></i>wrong path, thrown away</span></div></section>
+  <div class="read" id="read"></div>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const PRESETS={
+ 'No dependencies':['add r1, r2, r3','add r4, r5, r6','add r7, r8, r9','add r10, r11, r12','add r13, r14, r15','add r16, r17, r18'],
+ 'A dependent chain':['add r1, r2, r3','add r4, r1, r5','add r6, r4, r7','add r8, r6, r9','add r10, r8, r11'],
+ 'Load, then use it':['load r1, r2','add r3, r1, r4','load r5, r3','add r6, r5, r7','add r8, r6, r1'],
+ 'A loop with a branch':['load r1, r2','add r3, r4, r5','add r6, r7, r8','br','add r9, r10, r11']};
+let fwd=false, pred=false, seen={}, repsDefault={'A loop with a branch':6};
+$('#presets').innerHTML=Object.keys(PRESETS).map(k=>`<button class="btn ${k==='A dependent chain'?'on':''}" data-p="${k}">${k}</button>`).join(' ');
+$('#presets').onclick=e=>{ const b=e.target.closest('[data-p]'); if(!b) return; document.querySelectorAll('[data-p]').forEach(x=>x.classList.toggle('on',x===b));
+  $('#prog').value=PRESETS[b.dataset.p].join('\n'); $('#reps').value=repsDefault[b.dataset.p]||1; run(); };
+$('#prog').value=PRESETS['A dependent chain'].join('\n');
+function parse(){
+  const out=[], errs=[];
+  $('#prog').value.split('\n').forEach((raw,i)=>{ const l=raw.replace(/#.*/,'').trim(); if(!l) return; const t=l.split(/[\s,]+/), op=t[0].toLowerCase();
+    if(op==='add'&&t.length===4) out.push({text:l,op:'alu',dst:t[1],src:[t[2],t[3]]});
+    else if(op==='load'&&t.length===3) out.push({text:l,op:'load',dst:t[1],src:[t[2]]});
+    else if(op==='br') out.push({text:'br  (branch)',op:'br',dst:null,src:[]});
+    else errs.push(`Line ${i+1}: use “add rd, rs, rt”, “load rd, rs”, or “br”.`); });
+  $('#err').textContent=errs.join(' '); return out;
+}
+// Deterministic pseudo-random numbers, so changing a toggle never changes which branches go which way.
+function prng(seed){ return ()=>{ seed=(seed*1664525+1013904223)%4294967296; return seed/4294967296; }; }
+function simulate(){
+  const prog=parse(), D=+$('#depth').value, reps=+$('#reps').value, p=+$('#pr').value/100, front=D-4, rnd=prng(7);
+  const rows=[]; let fetchFree=0, prevE=-1, mispredicts=0, mispredictCycles=0, brCount=0, stallCycles=0; const prod={};
+  for(let r=0;r<reps;r++){
+    let skip=0;
+    for(let k=0;k<prog.length;k++){
+      if(skip>0){ skip--; continue; }
+      const ins=prog[k]; const F0=Math.max(fetchFree,prevE-front);
+      let E=Math.max(F0+front+1,prevE+1);
+      const E0=E;
+      ins.src.forEach(s=>{ const pr=prod[s]; if(!pr) return;
+        const need=fwd?(pr.load?pr.M+1:pr.E+1):pr.W+1; E=Math.max(E,need); });
+      stallCycles+=E-E0;
+      const row={text:ins.text,F0,D:front,E,M:E+1,W:E+2,stall:E-E0,kind:'ok'}; rows.push(row);
+      if(ins.dst) prod[ins.dst]={E,M:E+1,W:E+2,load:ins.op==='load'};
+      prevE=E; fetchFree=F0+1;
+      if(ins.op==='br'){ brCount++; const taken=rnd()<p;  // "taken" is the likely outcome; the static predictor always guesses taken
+        if(taken&&k+1<prog.length) skip=1;
+        const wrong=pred?!taken:true;   // with no prediction, every branch stalls fetch until it resolves
+        if(wrong){ if(pred) mispredicts++; const gap=E+1-(F0+1); mispredictCycles+=gap;
+          if(pred){ const g=Math.min(gap,8); for(let j=0;j<g;j++) rows.push({text:'(wrong path)',F0:F0+1+j,D:front,E:null,kind:'wrong',flush:E+1}); }
+          fetchFree=E+1; } }
+    }
+  }
+  const last=rows.filter(x=>x.kind==='ok').slice(-1)[0], cycles=last?last.W+1:0, n=rows.filter(x=>x.kind==='ok').length;
+  return {rows,cycles,n,D,mispredicts,mispredictCycles,brCount,stallCycles,front};
+}
+function draw(s){
+  const cv=$('#diag'), g=cv.getContext('2d'), cw=s.cycles>70?15:24, rh=22, lw=170, top=26, W=lw+s.cycles*cw+20, H=top+s.rows.length*rh+10;
+  cv.width=W; cv.height=H; g.clearRect(0,0,W,H); g.font='12px Barlow'; g.fillStyle='#5B6172';
+  for(let c=0;c<s.cycles;c++){ if(cw>20||c%2===0) g.fillText(c+1,lw+c*cw+(cw>20?6:2),18); }
+  const COL={F:'#0090C8',D:'#7A4FE0',E:'#E8620A',M:'#E8A400',W:'#12A66E'};
+  s.rows.forEach((r,i)=>{ const y=top+i*rh; g.fillStyle=r.kind==='wrong'?'#E23A3A':'#1A1C2A'; g.font='12px JetBrains Mono'; g.fillText(r.text.length>22?r.text.slice(0,21)+'…':r.text,6,y+15);
+    const cell=(c,col,lab)=>{ g.fillStyle=col; g.fillRect(lw+c*cw,y+2,cw-2,rh-4); if(cw>20){ g.fillStyle='#fff'; g.font='bold 11px Barlow'; g.fillText(lab,lw+c*cw+8,y+16); } };
+    if(r.kind==='wrong'){ for(let c=r.F0;c<=Math.min(r.flush-1,r.F0+s.front-1);c++) cell(c,'#E23A3A','F'); const dc=r.F0+s.front; if(dc<=r.flush-1) cell(dc,'#E23A3A','D'); g.fillStyle='#E23A3A'; g.font='bold 12px Barlow'; g.fillText('✕',lw+r.flush*cw-14,y+16); return; }
+    for(let c=0;c<s.front;c++) cell(r.F0+c,COL.F,'F');
+    cell(r.F0+s.front,COL.D,'D');
+    for(let b=1;b<=r.stall;b++) cell(r.F0+s.front+b,'#C9CDDA','·');
+    cell(r.E,COL.E,'E'); cell(r.M,COL.M,'M'); cell(r.W,COL.W,'W'); });
+}
+function run(){
+  const s=simulate(); draw(s); $('#dv').textContent=$('#depth').value; $('#rv').textContent=$('#reps').value; $('#prv').textContent=$('#pr').value+'%';
+  const ipc=s.cycles?s.n/s.cycles:0, ideal=s.n+s.D-1;
+  $('#read').innerHTML=`<div><small>Cycles elapsed</small><b>${s.cycles}</b><small>perfect overlap would take ${ideal}</small></div>`+
+    `<div><small>Instructions completed</small><b>${s.n}</b></div>`+
+    `<div><small>Instructions per cycle</small><b style="color:${ipc>0.8?'var(--green)':ipc>0.5?'var(--orange)':'var(--red)'}">${ipc.toFixed(2)}</b><small>1.00 is the best this pipeline can do</small></div>`+
+    `<div><small>Cycles lost to waiting for answers</small><b>${s.stallCycles}</b></div>`+
+    `<div><small>Cycles lost to branches</small><b>${s.mispredictCycles}</b><small>${s.brCount} branch${s.brCount===1?'':'es'}${pred?`, ${s.mispredicts} guessed wrong`:', each stalls the front end'}</small></div>`;
+  check(s,ipc);
+}
+function check(s,ipc){
+  const name=document.querySelector('[data-p].on')?.dataset.p;
+  if(name==='A dependent chain'&&!fwd&&s.stallCycles>=6) find('bubbles');
+  if(name==='A dependent chain'&&fwd&&s.stallCycles===0) find('forward');
+  if(name==='Load, then use it'&&fwd&&s.stallCycles>0) find('loaduse');
+  if(name==='A loop with a branch'&&pred&&+$('#pr').value>=98&&ipc>0.8) find('predict');
+  if(name==='A loop with a branch'&&pred&&+$('#pr').value<=55&&s.mispredicts>=2) find('random');
+  if(name==='A loop with a branch'&&pred&&+$('#pr').value<=60&&s.D>=15) find('depth');
+}
+$('#fwd').onclick=()=>{ fwd=!fwd; $('#fwd').textContent=`Forwarding: ${fwd?'on':'off'}`; $('#fwd').classList.toggle('on',fwd); run(); };
+$('#pred').onclick=()=>{ pred=!pred; $('#pred').textContent=`Branch prediction: ${pred?'on':'off'}`; $('#pred').classList.toggle('on',pred); run(); };
+['pr','depth','reps','prog'].forEach(id=>$('#'+id).addEventListener('input',run));
+const FINDS=[
+ ['bubbles','Load “a dependent chain” with forwarding off. How many grey bubbles?'],
+ ['forward','Switch forwarding on. Does the chain run without a stall?'],
+ ['loaduse','Load “load, then use it” with forwarding on. One bubble still remains. Where?'],
+ ['predict','In “a loop with a branch”, turn prediction on and set the branch to 100%.'],
+ ['random','Now drag the slider down to 50%: the same program, a random branch.'],
+ ['depth','At 50%, push the pipeline depth to 15 or more.']];
+const TELL={
+ bubbles:'Each instruction needs the answer to the one just before it, which has not yet been written back. Without a shortcut the consumer must wait in decode until the producer reaches the last stage, leaving a gap — a bubble — of two or three cycles each time. Overlap was supposed to give one instruction per cycle; a chain of dependencies gives close to one every three.',
+ forward:'Forwarding wires the result straight from the end of one instruction’s execute stage to the start of the next’s, skipping the trip through write-back. The bubbles vanish and the chain runs at full speed. It costs extra wires and multiplexers — the same selector you built at the Gates station — and every real processor has it.',
+ loaduse:'A load does not know its value until it has finished reading memory, one stage after execute. Even with forwarding, an instruction that needs the loaded value in the very next cycle must wait one bubble. That single cycle is called the load-use penalty, and it is why compilers try to put an unrelated instruction between a load and its use.',
+ predict:'When the branch nearly always goes the way the processor guessed, the front of the pipeline keeps fetching the right instructions and nothing is ever thrown away. The loop runs at close to one instruction per cycle, as if the branch were not there at all.',
+ random:'The program is identical; only the data changed. At 50% the guess is a coin toss, so about half the branches are mispredicted, and each one throws away all the work fetched down the wrong path and restarts. Speed depends on the program’s data, not just its code.',
+ depth:'A deeper pipeline lets the clock run faster, but the branch is resolved further along, so a wrong guess flushes more stages and restarts later. At 15 stages the penalty is more than three times what it was at 5. This is the real reason clock speeds stopped climbing: past a point, the extra stages cost more in mispredictions than they gained in frequency. (This model keeps instruction latency fixed and only moves where branches resolve, so it shows the misprediction cost cleanly.)'};
+let seenInit=false;
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+run(); renderQs();
+</script>

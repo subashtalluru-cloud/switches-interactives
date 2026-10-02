@@ -1,0 +1,146 @@
+<meta charset="utf-8">
+<!-- The Waterfall — Switches All the Way Down, Chapter 42 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1220px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--violet)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:230px 1fr 110px;gap:10px;align-items:center;margin:4px 0}
+.sl input{accent-color:var(--pink)} .sl b{font-family:"JetBrains Mono",monospace;color:var(--orange);text-align:right}
+.scroll{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#FAFBFE}
+canvas{display:block}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--soft);margin-top:8px}
+.legend span i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:22px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.what{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.what div{border-radius:10px;padding:10px 12px;border:2px solid}
+.what b{font-family:"JetBrains Mono",monospace;font-size:18px}
+.note{background:#EEE8FB;border:1px solid #D3C4F3;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.what{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>The <span>waterfall</span></h1>
+  <p>Loading one web page means dozens of separate requests, each starting with a conversation before a single byte of the page moves. Here is where the time really goes, one bar per request. Turn bandwidth up a hundredfold and see how little changes; halve the latency and watch everything move.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar" style="margin-bottom:8px"><span style="color:var(--soft)">The page:</span><button class="btn" data-pf="lean">lean</button><button class="btn on" data-pf="typical">typical</button><button class="btn" data-pf="heavy">heavy, with third parties</button></div>
+    <div class="sl"><span>Round-trip latency</span><input type="range" id="rtt" min="0" max="1000" value="460" aria-label="Round trip latency"><b id="rttv"></b></div>
+    <div class="sl"><span>Bandwidth</span><input type="range" id="bw" min="0" max="1000" value="570" aria-label="Bandwidth"><b id="bwv"></b></div>
+    <div class="bar" style="margin-top:6px"><button class="btn on" id="reuse">Reuse connections: on</button><button class="btn" id="dns">DNS answer cached: off</button><button class="btn" id="tls">TLS session resumption: off</button></div>
+  </section>
+  <section class="card"><div class="scroll"><canvas id="wf"></canvas></div>
+    <div class="legend"><span><i style="background:#7A4FE0"></i>DNS lookup</span><span><i style="background:#E8620A"></i>connect (TCP)</span><span><i style="background:#E5197B"></i>encryption set-up (TLS)</span><span><i style="background:#0090C8"></i>waiting for the server</span><span><i style="background:#C9CDDA"></i>queued behind other downloads</span><span><i style="background:#12A66E"></i>downloading</span><span style="color:#1A1C2A"><b>│</b> first content · <b style="color:#E23A3A">│</b> fully loaded</span></div></section>
+  <div class="read" id="read"></div>
+  <section class="card"><h2>What would actually help?</h2><div class="what" id="what"></div></section>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), SERVER=20;
+let pf='typical', reuse=true, dnsCache=false, tlsResume=false, seen={}, moved={rtt:false,bw:false}, base=null;
+const rttOf=v=>Math.round(10*Math.pow(30,v/1000)), bwOf=v=>Math.round(Math.pow(10,v/1000*3));   // 10–300 ms ; 1–1000 Mbps
+function profile(kind){
+  const R=[], add=(name,host,kb,after,block)=>{ R.push({name,host,kb,after,block:!!block}); return R.length-1; };
+  if(kind==='lean'){ const h=add('index.html','site',24,-1); add('style.css','site',18,h,true); add('app.js','site',70,h); add('hero.jpg','site',120,h); add('logo.svg','site',6,h); add('icons.png','site',14,h); }
+  else if(kind==='typical'){ const h=add('index.html','site',60,-1); const c1=add('main.css','site',45,h,true); add('theme.css','site',30,h,true); const j1=add('vendor.js','site',120,h); add('app.js','site',80,h); add('widgets.js','site',40,h);
+    for(let i=0;i<8;i++) add(`photo${i+1}.jpg`,'cdn',60+((i*37)%90),h); add('font-a.woff2','fonts',32,c1); add('font-b.woff2','fonts',30,c1); const an=add('analytics.js','analytics',25,j1); add('collect (pixel)','analytics',1,an); }
+  else { const h=add('index.html','site',90,-1); const c=[add('base.css','site',60,h,true),add('layout.css','site',40,h,true),add('print.css','site',20,h,true)];
+    const js=[add('bundle.js','site',150,h),add('vendor.js','cdn',120,h),add('ui.js','site',90,h),add('polyfill.js','cdn',60,h)]; add('chart.js','cdn',110,h); add('carousel.js','cdn',45,h);
+    for(let i=0;i<14;i++) add(`img${i+1}.jpg`,'cdn',40+((i*53)%120),h); for(let i=0;i<3;i++) add(`font${i+1}.woff2`,'fonts',30,c[0]);
+    const tm=add('tagmanager.js','tags',35,js[0]); const th=[['ads1',80],['ads2',60],['trk1',40],['trk2',30],['social',55],['chat',70]];
+    th.forEach(([host,kb])=>{ const t=add(`${host}.js`,host,kb,tm); add(`${host}/pixel`,host,1,t); add(`${host}/sync`,host,2,t); }); }
+  return R;
+}
+function dlTime(kb,bytesPerMs,rtt,fresh){ const size=kb*1024; const t=size/bytesPerMs; if(!fresh) return Math.max(1,t); const rounds=Math.ceil(Math.log2(size/14600+1)); return Math.max(t,(rounds-1)*rtt,1); }
+function simulate(rtt,bwMbps,kind){
+  const R=profile(kind||pf).map((r,i)=>({...r,i,done:false})), bpm=bwMbps*125;
+  const dnsDone={}, pools={}; let guard=0, linkFree=0;   // the access link is shared: downloads queue behind each other
+  while(R.some(r=>!r.done)&&guard++<500){
+    const cand=R.filter(r=>!r.done&&(r.after<0||R[r.after].done)).map(r=>({r,ready:r.after<0?0:R[r.after].end})).sort((a,b)=>a.ready-b.ready||a.r.i-b.r.i)[0]; const r=cand.r, ready=cand.ready;
+    const seg=[]; let t=ready;
+    // DNS: one lookup per host, shared by every request to that host
+    if(!(r.host in dnsDone)){ if(dnsCache) dnsDone[r.host]=ready; else { seg.push(['dns',ready,ready+rtt]); dnsDone[r.host]=ready+rtt; } }
+    t=Math.max(t,dnsDone[r.host]);
+    const pool=pools[r.host]||(pools[r.host]=[]);
+    // A host gets at most six connections. With reuse on, a free connection is reused as it is; with reuse
+    // off, the slot is reused but every request still pays a fresh handshake.
+    let conn=null, fresh=true; const earliest=pool.slice().sort((a,b)=>a.free-b.free)[0], idle=pool.filter(c=>c.free<=t).sort((a,b)=>a.free-b.free)[0];
+    if(idle) conn=idle; else if(pool.length>=6) conn=earliest;
+    if(conn&&reuse) fresh=false;
+    if(conn) t=Math.max(t,conn.free);
+    if(fresh){ seg.push(['conn',t,t+rtt]); t+=rtt; const tl=tlsResume?rtt:2*rtt; seg.push(['tls',t,t+tl]); t+=tl; if(!conn){ conn={free:0}; pool.push(conn); } }
+    const w=rtt+SERVER; seg.push(['wait',t,t+w]); t+=w;
+    if(linkFree>t){ seg.push(['queued',t,linkFree]); t=linkFree; }
+    const d=dlTime(r.kb,bpm,rtt,fresh); seg.push(['dl',t,t+d]); linkFree=t+r.kb*1024/bpm; t+=d;
+    conn.free=t;
+    r.seg=seg; r.end=t; r.start=seg[0][1]; r.done=true;
+  }
+  const html=R[0].end, css=Math.max(html,...R.filter(r=>r.block).map(r=>r.end)); return {R,first:css+30,load:Math.max(...R.map(r=>r.end))};
+}
+const COL={dns:'#7A4FE0',conn:'#E8620A',tls:'#E5197B',wait:'#0090C8',queued:'#C9CDDA',dl:'#12A66E'};
+function draw(){
+  const rtt=rttOf(+$('#rtt').value), bw=bwOf(+$('#bw').value), s=simulate(rtt,bw), R=s.R, rh=R.length>30?13:20, lw=170, top=26, W=1060, plot=W-lw-20, H=top+R.length*rh+16, max=s.load*1.04;
+  const cv=$('#wf'); cv.width=W; cv.height=H; const g=cv.getContext('2d'); g.clearRect(0,0,W,H);
+  const step=[50,100,200,250,500,1000,2000,5000].find(v=>max/v<=10)||5000, X=t=>lw+t/max*plot;
+  g.font='11px Barlow'; g.fillStyle='#5B6172'; for(let t=0;t<=max;t+=step){ g.fillText(t>=1000?(t/1000)+' s':t+' ms',X(t)-12,16); g.strokeStyle='#EDEFF6'; g.beginPath(); g.moveTo(X(t),22); g.lineTo(X(t),H-6); g.stroke(); }
+  R.forEach((r,i)=>{ const y=top+i*rh; g.fillStyle='#1A1C2A'; g.font=(rh>16?'12px':'10px')+' JetBrains Mono'; g.fillText((r.name+' · '+r.host).slice(0,26),6,y+rh-4);
+    r.seg.forEach(([k,a,b])=>{ g.fillStyle=COL[k]; g.fillRect(X(a),y+2,Math.max(1.5,X(b)-X(a)),rh-4); }); });
+  g.strokeStyle='#1A1C2A'; g.lineWidth=2; g.beginPath(); g.moveTo(X(s.first),22); g.lineTo(X(s.first),H-6); g.stroke();
+  g.strokeStyle='#E23A3A'; g.beginPath(); g.moveTo(X(s.load),22); g.lineTo(X(s.load),H-6); g.stroke(); g.lineWidth=1;
+  $('#rttv').textContent=rtt+' ms'; $('#bwv').textContent=bw>=1000?'1 Gbps':bw+' Mbps';
+  const total=R.reduce((a,r)=>a+r.kb,0), hosts=new Set(R.map(r=>r.host)).size;
+  $('#read').innerHTML=`<div><small>First content appears</small><b>${Math.round(s.first)} ms</b></div><div><small>Fully loaded</small><b>${Math.round(s.load)} ms</b></div><div><small>Requests</small><b>${R.length}</b><small>to ${hosts} hosts</small></div><div><small>Total downloaded</small><b>${total>=1024?(total/1024).toFixed(1)+' MB':total+' KB'}</b></div>`;
+  // Sensitivity: change one thing at a time and re-run the same model.
+  const fast=simulate(rtt,Math.min(bw*10,10000)), lat=simulate(rtt/2,bw);
+  const pct=(a,b)=>Math.round((1-a/b)*100);
+  $('#what').innerHTML=`<div style="border-color:#12A66E"><small>Ten times the bandwidth</small><br>first content <b>${Math.round(fast.first)} ms</b> <span style="color:#12A66E">(${pct(fast.first,s.first)}% sooner)</span><br>fully loaded <b>${Math.round(fast.load)} ms</b> <span style="color:#12A66E">(${pct(fast.load,s.load)}% sooner)</span></div>`+
+    `<div style="border-color:#7A4FE0"><small>Half the latency</small><br>first content <b>${Math.round(lat.first)} ms</b> <span style="color:#7A4FE0">(${pct(lat.first,s.first)}% sooner)</span><br>fully loaded <b>${Math.round(lat.load)} ms</b> <span style="color:#7A4FE0">(${pct(lat.load,s.load)}% sooner)</span></div>`;
+  check(s,fast,lat,pct);
+}
+function check(s,fast,lat,pct){
+  if(moved.bw&&pct(fast.first,s.first)<15) find('bw');
+  if(moved.rtt&&pct(lat.first,s.first)>35) find('rtt');
+  if(pf==='heavy') find('heavy');
+  if(!reuse&&base&&s.load>base.load*1.2) find('reuse');
+  if(dnsCache&&tlsResume) find('setup');
+  base={load:s.load};
+}
+function recheckReuse(){ /* handled in check */ }
+$('#rtt').oninput=()=>{ moved.rtt=true; draw(); }; $('#bw').oninput=()=>{ moved.bw=true; draw(); };
+document.querySelector('main').addEventListener('click',e=>{ const b=e.target.closest('[data-pf]'); if(b){ pf=b.dataset.pf; document.querySelectorAll('[data-pf]').forEach(x=>x.classList.toggle('on',x===b)); draw(); } });
+$('#reuse').onclick=()=>{ base=null; const before=simulate(rttOf(+$('#rtt').value),bwOf(+$('#bw').value)).load; reuse=!reuse; $('#reuse').textContent=`Reuse connections: ${reuse?'on':'off'}`; $('#reuse').classList.toggle('on',reuse); base={load:before}; draw(); };
+$('#dns').onclick=()=>{ dnsCache=!dnsCache; $('#dns').textContent=`DNS answer cached: ${dnsCache?'on':'off'}`; $('#dns').classList.toggle('on',dnsCache); draw(); };
+$('#tls').onclick=()=>{ tlsResume=!tlsResume; $('#tls').textContent=`TLS session resumption: ${tlsResume?'on':'off'}`; $('#tls').classList.toggle('on',tlsResume); draw(); };
+const FINDS=[
+ ['bw','Drag the bandwidth from low to high. How far does the “first content” line move?'],
+ ['rtt','Now drag the latency down. What moves?'],
+ ['heavy','Choose the heavy page. Count the requests and compare with its size.'],
+ ['reuse','Turn connection reuse off.'],
+ ['setup','Turn on both the DNS cache and TLS resumption.']];
+const TELL={
+ bw:'First content barely moves however much bandwidth you add, because almost all of that time is round trips: looking up the name, opening the connection, agreeing the encryption, asking for the page. None of those carries more than a few hundred bytes, so a faster pipe does nothing for them. Bandwidth only matters once there is a lot of data to move, and a page’s first moments have almost none.',
+ rtt:'Halving the latency shortens every bar at once, because every phase that is not a download is made of round trips, and a round trip is exactly what latency measures. Latency is set by distance and the speed of light; no money buys it back. That is why content is copied to servers near you.',
+ heavy:'The heavy page is not slow because it is large; it is slow because it asks for dozens of things from many different places, and each new place starts with its own lookup, connection and encryption set-up before delivering a single byte. Fifty small requests cost fifty round-trip conversations. Third-party scripts that fetch more third-party scripts make the staircase longer still.',
+ reuse:'Without reuse, every request pays for a brand-new connection and handshake. The set-up cost is paid fifty times instead of a handful of times, and the waterfall stretches dramatically. Keeping a connection open and sending many requests down it is the single biggest improvement in the history of the web’s protocols.',
+ setup:'Both are shortcuts that skip round trips: a cached DNS answer removes the lookup entirely, and a resumed TLS session removes one of the two encryption round trips. Neither adds bandwidth or changes the page; they simply remove conversations. The theme of the whole page: a faster connection does not make the web feel faster. Fewer round trips does.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join('')+'<p style="font-size:12px;color:var(--soft)">A simplified model: one lookup per host, up to six connections per host, slow start on new connections, a 20 ms server think-time, and one shared access link that downloads queue for. The shapes are real; the exact milliseconds are illustrative.</p>'; }
+draw(); renderQs();
+</script>

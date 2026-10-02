@@ -1,0 +1,270 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Switches All the Way Down · Interactive Companion</title><style>
+:root{--ink:#1A1C2A;--soft:#565C70;--line:rgba(26,28,42,.14);--pink:#E5197B;--cyan:#0090C8;--violet:#7A4FE0;--sun:#E8A400}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;color:var(--ink);font:16px/1.5 Barlow,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:linear-gradient(180deg,#EDF7FC 0%,#EDEDFC 12%,#F8EDFC 25%,#FCEDF5 37%,#FCEFED 50%,#FCFAED 62%,#F3FCED 75%,#EDFCF1 87%,#EDFCFC 100%);background-attachment:fixed}
+.wrap{max-width:1160px;margin:0 auto;padding:26px 18px 60px}
+h1{font-size:clamp(28px,5vw,44px);line-height:1.1;margin:0;font-weight:800;letter-spacing:-.015em}h1 span{color:var(--pink)}
+.lede{margin:10px 0 0;max-width:72ch;color:var(--soft);font-size:17px}
+.stats{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 6px}
+.stat{background:rgba(255,255,255,.78);border:1px solid var(--line);border-radius:14px;padding:10px 18px}
+.stat b{display:block;font:800 28px "JetBrains Mono",ui-monospace,monospace}.stat small{color:var(--soft)}
+.bar{position:sticky;top:0;z-index:10;margin:14px -18px 10px;padding:10px 18px;background:rgba(255,255,255,.82);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.bar .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.bar input[type=search]{font:inherit;padding:9px 13px;border:1px solid var(--line);border-radius:10px;width:min(300px,100%);background:#fff}
+.chip{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:999px;padding:6px 14px;background:#fff;color:var(--ink);cursor:pointer;text-decoration:none;display:inline-block}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.jump{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}.jump a{font-size:13px;font-weight:700;text-decoration:none;color:var(--ink);padding:3px 11px;border-radius:999px;border:2px solid}
+label.tg{font-size:14px;color:var(--soft);display:flex;gap:6px;align-items:center}
+a:focus-visible,.chip:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+section.part{margin:26px 0 0;border-radius:20px;padding:6px 16px 14px;border:1px solid var(--line)}
+section.part>h2{margin:12px 0 10px;font-size:13px;letter-spacing:.09em;text-transform:uppercase;font-weight:800;color:var(--soft)}
+section.part>h2 b{display:block;font-size:22px;letter-spacing:0;text-transform:none;color:var(--ink)}
+.ch{display:grid;grid-template-columns:230px 1fr;gap:14px;background:rgba(255,255,255,.86);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:9px}
+.ch.none{opacity:.55;padding:8px 14px;background:rgba(255,255,255,.5)}
+.chn .no{display:inline-block;color:#fff;border-radius:8px;padding:1px 10px;margin-right:6px;font:800 14px "JetBrains Mono",monospace}.chn span{font-weight:700}
+.items{display:flex;flex-wrap:wrap;gap:9px}
+.it{display:block;text-decoration:none;color:var(--ink);background:#fff;border:1px solid var(--line);border-left:6px solid var(--cyan);border-radius:11px;padding:9px 13px;flex:1 1 250px;max-width:400px;transition:transform .12s,box-shadow .12s}
+.it:hover{transform:translateY(-2px);box-shadow:0 5px 14px rgba(20,20,50,.14)}
+.it.wb{border-left-color:var(--violet)}
+.it .k{display:block;font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--cyan)}.it.wb .k{color:var(--violet)}
+.it b{display:block;font-size:16.5px}.it small{display:block;color:var(--soft);line-height:1.35}
+.tag{display:inline-block;background:#FFF0C7;border:1px solid #F0D07A;border-radius:6px;padding:0 7px;font-size:11px;font-weight:700;margin-top:4px}
+#bench{margin:26px 0 0;border-radius:20px;padding:6px 16px 16px;border:1px solid var(--line);background:linear-gradient(135deg,#EFE6FF,#DDEBFF)}
+#bench h2{margin:12px 0 4px;font-size:24px}#bench p.s{margin:0 0 12px;color:var(--soft);max-width:80ch}
+.big{display:inline-block;background:var(--violet);color:#fff;font-weight:800;text-decoration:none;border-radius:12px;padding:10px 20px;margin:4px 0 14px}
+.stations{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.st{background:rgba(255,255,255,.88);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.st h3{margin:0;font-size:18px}.st h3 i{font:800 12px "JetBrains Mono",monospace;font-style:normal;color:var(--violet);display:block;letter-spacing:.06em}
+.st p{margin:4px 0 8px;color:var(--soft);font-size:14px}
+.st a{display:block;text-decoration:none;color:var(--ink);padding:5px 8px;border-radius:8px;font-size:14.5px}
+.st a:hover{background:#EFE6FF}.st a small{color:var(--soft)}.st a b{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--violet);margin-right:6px}
+.empty{display:none;text-align:center;color:var(--soft);padding:30px}
+footer{margin-top:30px;color:var(--soft);font-size:14px}
+@media(max-width:760px){.ch{grid-template-columns:1fr}.bar{margin:14px -18px 10px}}
+</style></head><body><div class="wrap">
+<h1>Switches All the Way Down <span>· interactive companion</span></h1>
+<p class="lede">Every interactive in the book, in the order you meet it. Each one is also linked from the end of its own chapter. <b>Standalone</b> pieces take a minute or two. The <b>Workbench</b> is one long build: you begin with a single NAND gate and finish with a working computer.</p>
+<div class="stats"><div class="stat"><b>35</b><small>standalone interactives</small></div><div class="stat"><b>22</b><small>Workbench challenges, 5 stations</small></div><div class="stat"><b>40 / 48</b><small>chapters with an interactive</small></div></div>
+<div class="bar"><div class="row"><input id="q" type="search" placeholder="Search chapters and interactives…" aria-label="Search"><button class="chip on" data-k="all">All</button><button class="chip" data-k="standalone">Standalone</button><button class="chip" data-k="workbench">Workbench</button><label class="tg"><input id="none" type="checkbox"> show chapters without one</label></div><div class="jump">
+<a href="#p1" style="border-color:#178CBE;background:#D1EDF9">Part One</a>
+<a href="#p2" style="border-color:#1917BE;background:#D1D1F9">Part Two</a>
+<a href="#p3" style="border-color:#9017BE;background:#EED1F9">Part Three</a>
+<a href="#p4" style="border-color:#BE1775;background:#F9D1E8">Part Four</a>
+<a href="#p5" style="border-color:#BE3017;background:#F9D7D1">Part Five</a>
+<a href="#p6" style="border-color:#BEA717;background:#F9F4D1">Part Six</a>
+<a href="#p7" style="border-color:#5EBE17;background:#E2F9D1">Part Seven</a>
+<a href="#p8" style="border-color:#17BE47;background:#D1F9DC">Part Eight</a>
+<a href="#p9" style="border-color:#17BEBE;background:#D1F9F9">Part Nine</a>
+<a href="#bench" style="border-color:#7A4FE0;background:#EFE6FF">Workbench</a></div></div>
+<section class="part" id="p1" style="background:#E0F2FA"><h2>Part One<b>The Machinery You Cannot See</b></h2>
+<div class="ch" data-text="four hundred milliseconds four hundred milliseconds one phone tap laid out in time: zoom from the whole 400 ms down to a third of a billionth of a second." data-kinds="standalone "><div class="chn"><span class="no" style="background:#178CBE">1</span><span>Four Hundred Milliseconds</span></div><div class="items">
+<a class="it" href="four-hundred-milliseconds.html"><span class="k">Standalone</span><b>Four Hundred Milliseconds</b><small>One phone tap laid out in time: zoom from the whole 400 ms down to a third of a billionth of a second.</small></a>
+</div></div>
+<div class="ch none" data-text="what counts as computing " data-kinds=""><div class="chn"><span class="no" style="background:#178CBE">2</span><span>What Counts as Computing</span></div><div class="items"><small style="color:var(--soft)">No interactive for this chapter.</small></div></div>
+<div class="ch" data-text="the machine that was never built the crank of differences turn babbage’s crank: one column of number wheels adding into the next prints tables of polynomials." data-kinds="standalone "><div class="chn"><span class="no" style="background:#178CBE">3</span><span>The Machine That Was Never Built</span></div><div class="items">
+<a class="it" href="crank-of-differences.html"><span class="k">Standalone</span><b>The Crank of Differences</b><small>Turn Babbage’s crank: one column of number wheels adding into the next prints tables of polynomials.</small></a>
+</div></div>
+<div class="ch" data-text="holes in cardboard the loom that cannot count punch the cards and weave the cloth: what a machine can do with instructions but without a single decision." data-kinds="standalone "><div class="chn"><span class="no" style="background:#178CBE">4</span><span>Holes in Cardboard</span></div><div class="items">
+<a class="it" href="loom-that-cannot-count.html"><span class="k">Standalone</span><b>The Loom That Cannot Count</b><small>Punch the cards and weave the cloth: what a machine can do with instructions but without a single decision.</small></a>
+</div></div>
+<div class="ch" data-text="what &quot;programmable&quot; actually means the four-instruction machine a deliberately pathetic machine with load, add, store and jump if zero. find out what it can do anyway." data-kinds="standalone "><div class="chn"><span class="no" style="background:#178CBE">5</span><span>What &quot;Programmable&quot; Actually Means</span></div><div class="items">
+<a class="it" href="four-instruction-machine.html"><span class="k">Standalone</span><b>The Four-Instruction Machine</b><small>A deliberately pathetic machine with LOAD, ADD, STORE and JUMP IF ZERO. Find out what it can do anyway.</small></a>
+</div></div>
+<div class="ch" data-text="war, tubes and the first electronic machines rewire or reload make the same change to a machine programmed by cables and to one programmed from memory, and time yourself." data-kinds="standalone "><div class="chn"><span class="no" style="background:#178CBE">6</span><span>War, Tubes and the First Electronic Machines</span></div><div class="items">
+<a class="it" href="rewire-or-reload.html"><span class="k">Standalone</span><b>Rewire or Reload</b><small>Make the same change to a machine programmed by cables and to one programmed from memory, and time yourself.</small></a>
+</div></div>
+</section>
+<section class="part" id="p2" style="background:#E0E0FA"><h2>Part Two<b>Making the World Representable</b></h2>
+<div class="ch" data-text="why two why two? the same sixteen digits on a many-level wire and a two-level wire: turn up the noise and see which one you can still read." data-kinds="standalone "><div class="chn"><span class="no" style="background:#1917BE">7</span><span>Why Two</span></div><div class="items">
+<a class="it" href="noise-slider.html"><span class="k">Standalone</span><b>Why Two?</b><small>The same sixteen digits on a many-level wire and a two-level wire: turn up the noise and see which one you can still read.</small></a>
+</div></div>
+<div class="ch" data-text="counting without fingers the number wheel a counter with two digits per wheel: numbers go round in a circle, and everything strange about computer arithmetic follows." data-kinds="standalone "><div class="chn"><span class="no" style="background:#1917BE">8</span><span>Counting Without Fingers</span></div><div class="items">
+<a class="it" href="number-wheel.html"><span class="k">Standalone</span><b>The Number Wheel</b><small>A counter with two digits per wheel: numbers go round in a circle, and everything strange about computer arithmetic follows.</small></a>
+</div></div>
+<div class="ch" data-text="letters, numbers, and the long unicode argument what is a character, really? type any text and see the characters, their unicode numbers and the bytes actually stored, and where they fail to line up." data-kinds="standalone "><div class="chn"><span class="no" style="background:#1917BE">9</span><span>Letters, Numbers, and the Long Unicode Argument</span></div><div class="items">
+<a class="it" href="byte-inspector.html"><span class="k">Standalone</span><b>What Is a Character, Really?</b><small>Type any text and see the characters, their Unicode numbers and the bytes actually stored, and where they fail to line up.</small></a>
+</div></div>
+<div class="ch" data-text="pictures, sound, and the art of throwing things away catching a wave in numbers choose how often and how finely to measure a sound wave, and listen to what survives. how much can you throw away? compress two very different pictures with your browser’s own jpeg encoder and magnify what is lost." data-kinds="standalone "><div class="chn"><span class="no" style="background:#1917BE">10</span><span>Pictures, Sound, and the Art of Throwing Things Away</span></div><div class="items">
+<a class="it" href="sampling-microphone.html"><span class="k">Standalone</span><b>Catching a Wave in Numbers</b><small>Choose how often and how finely to measure a sound wave, and listen to what survives.</small><span class="tag">plays sound</span></a>
+<a class="it" href="quality-slider.html"><span class="k">Standalone</span><b>How Much Can You Throw Away?</b><small>Compress two very different pictures with your browser’s own JPEG encoder and magnify what is lost.</small></a>
+</div></div>
+<div class="ch" data-text="the numbers that aren&#x27;t the float ruler every number a computer can store is a tick on a ruler. see where 0.1 really lands." data-kinds="standalone "><div class="chn"><span class="no" style="background:#1917BE">11</span><span>The Numbers That Aren&#x27;t</span></div><div class="items">
+<a class="it" href="float-ruler.html"><span class="k">Standalone</span><b>The Float Ruler</b><small>Every number a computer can store is a tick on a ruler. See where 0.1 really lands.</small></a>
+</div></div>
+<div class="ch" data-text="data about data same bytes, five readings sixteen bytes read at once as numbers, text, decimals, a picture and instructions." data-kinds="standalone "><div class="chn"><span class="no" style="background:#1917BE">12</span><span>Data About Data</span></div><div class="items">
+<a class="it" href="same-bytes-five-readings.html"><span class="k">Standalone</span><b>Same Bytes, Five Readings</b><small>Sixteen bytes read at once as numbers, text, decimals, a picture and instructions.</small></a>
+</div></div>
+</section>
+<section class="part" id="p3" style="background:#F2E0FA"><h2>Part Three<b>From Switches to Logic</b></h2>
+<div class="ch" data-text="the switch the transistor as a tap turn a gate voltage and watch a channel open, then pair two transistors into a not gate." data-kinds="standalone "><div class="chn"><span class="no" style="background:#9017BE">13</span><span>The Switch</span></div><div class="items">
+<a class="it" href="transistor-as-a-tap.html"><span class="k">Standalone</span><b>The Transistor as a Tap</b><small>Turn a gate voltage and watch a channel open, then pair two transistors into a NOT gate.</small></a>
+</div></div>
+<div class="ch" data-text="logic made of wire build not make a nand gate invert its input. build and undo the “not” in nand. build or meet de morgan’s law by inverting everything. build xor the hard one: “different”, in four nands if you can. build a selector a switch controlled by a signal, the part a processor routes data with." data-kinds="workbench"><div class="chn"><span class="no" style="background:#9017BE">14</span><span>Logic Made of Wire</span></div><div class="items">
+<a class="it wb" href="workbench.html#NOT"><span class="k">Workbench · Gates</span><b>Build NOT</b><small>Make a NAND gate invert its input.</small></a>
+<a class="it wb" href="workbench.html#AND"><span class="k">Workbench · Gates</span><b>Build AND</b><small>Undo the “not” in NAND.</small></a>
+<a class="it wb" href="workbench.html#OR"><span class="k">Workbench · Gates</span><b>Build OR</b><small>Meet De Morgan’s law by inverting everything.</small></a>
+<a class="it wb" href="workbench.html#XOR"><span class="k">Workbench · Gates</span><b>Build XOR</b><small>The hard one: “different”, in four NANDs if you can.</small></a>
+<a class="it wb" href="workbench.html#MUX"><span class="k">Workbench · Gates</span><b>Build a selector</b><small>A switch controlled by a signal, the part a processor routes data with.</small></a>
+</div></div>
+<div class="ch" data-text="building an adder build a half adder add two bits: a sum and a carry. build a full adder one column of long addition, with a carry in. the ripple race eight of your adders in a row: watch the wrong answers before the right one, and subtract." data-kinds="workbench"><div class="chn"><span class="no" style="background:#9017BE">15</span><span>Building an Adder</span></div><div class="items">
+<a class="it wb" href="workbench.html#HALF"><span class="k">Workbench · Adder</span><b>Build a half adder</b><small>Add two bits: a sum and a carry.</small></a>
+<a class="it wb" href="workbench.html#FULL"><span class="k">Workbench · Adder</span><b>Build a full adder</b><small>One column of long addition, with a carry in.</small></a>
+<a class="it wb" href="workbench.html#RACE"><span class="k">Workbench · Adder</span><b>The ripple race</b><small>Eight of your adders in a row: watch the wrong answers before the right one, and subtract.</small></a>
+</div></div>
+<div class="ch" data-text="remembering build a latch make two gates hold each other in place. build a d latch one input to store, one door to open. build a flip-flop two latches that are never open together: capture at one instant only. clock the counter your adder and your flip-flops in a loop: speed the clock up until it breaks. build a decoder turn a 2-bit address into one wire out of four. build a memory four registers, a decoder and a write button." data-kinds="workbench"><div class="chn"><span class="no" style="background:#9017BE">16</span><span>Remembering</span></div><div class="items">
+<a class="it wb" href="workbench.html#LATCH"><span class="k">Workbench · Memory</span><b>Build a latch</b><small>Make two gates hold each other in place.</small></a>
+<a class="it wb" href="workbench.html#DLATCH"><span class="k">Workbench · Memory</span><b>Build a D latch</b><small>One input to store, one door to open.</small></a>
+<a class="it wb" href="workbench.html#DFF"><span class="k">Workbench · Memory</span><b>Build a flip-flop</b><small>Two latches that are never open together: capture at one instant only.</small></a>
+<a class="it wb" href="workbench.html#COUNTER"><span class="k">Workbench · Memory</span><b>Clock the counter</b><small>Your adder and your flip-flops in a loop: speed the clock up until it breaks.</small></a>
+<a class="it wb" href="workbench.html#DECODE"><span class="k">Workbench · Memory</span><b>Build a decoder</b><small>Turn a 2-bit address into one wire out of four.</small></a>
+<a class="it wb" href="workbench.html#RAM"><span class="k">Workbench · Memory</span><b>Build a memory</b><small>Four registers, a decoder and a write button.</small></a>
+</div></div>
+<div class="ch" data-text="etching cities defect rain rain random defects on a wafer and watch yield collapse as chips get bigger." data-kinds="standalone "><div class="chn"><span class="no" style="background:#9017BE">17</span><span>Etching Cities</span></div><div class="items">
+<a class="it" href="defect-rain.html"><span class="k">Standalone</span><b>Defect Rain</b><small>Rain random defects on a wafer and watch yield collapse as chips get bigger.</small></a>
+</div></div>
+</section>
+<section class="part" id="p4" style="background:#FAE0EE"><h2>Part Four<b>The Processor</b></h2>
+<div class="ch" data-text="a machine with only nineteen ideas watch the machine step through programs on a processor made of your own parts. write the control rom fill in which switches close at each step of each instruction. exports real eeprom images." data-kinds="workbench"><div class="chn"><span class="no" style="background:#BE1775">18</span><span>A Machine With Only Nineteen Ideas</span></div><div class="items">
+<a class="it wb" href="workbench.html#CPU"><span class="k">Workbench · CPU</span><b>Watch the machine</b><small>Step through programs on a processor made of your own parts.</small></a>
+<a class="it wb" href="workbench.html#ROM"><span class="k">Workbench · CPU</span><b>Write the control ROM</b><small>Fill in which switches close at each step of each instruction. Exports real EEPROM images.</small></a>
+</div></div>
+<div class="ch" data-text="the vocabulary of silicon the bit budget divide eight bits between instruction and address, and run out. assemble by hand turn assembly into the switch positions you will set on the bench." data-kinds="workbench"><div class="chn"><span class="no" style="background:#BE1775">19</span><span>The Vocabulary of Silicon</span></div><div class="items">
+<a class="it wb" href="workbench.html#ISA"><span class="k">Workbench · CPU</span><b>The bit budget</b><small>Divide eight bits between instruction and address, and run out.</small></a>
+<a class="it wb" href="workbench.html#HAND"><span class="k">Workbench · CPU</span><b>Assemble by hand</b><small>Turn assembly into the switch positions you will set on the bench.</small></a>
+</div></div>
+<div class="ch" data-text="deciding the stack and the overwrite watch calls build the stack, then overflow a local buffer onto its own return address." data-kinds="standalone "><div class="chn"><span class="no" style="background:#BE1775">20</span><span>Deciding</span></div><div class="items">
+<a class="it" href="stack-and-the-overwrite.html"><span class="k">Standalone</span><b>The Stack and the Overwrite</b><small>Watch calls build the stack, then overflow a local buffer onto its own return address.</small></a>
+</div></div>
+<div class="ch" data-text="doing several things at once without meaning to the pipeline overlap instructions, then break the pipeline with dependencies and unpredictable branches. guess the branch predict branches yourself against the chip’s two-bit predictor." data-kinds="standalone "><div class="chn"><span class="no" style="background:#BE1775">21</span><span>Doing Several Things at Once Without Meaning To</span></div><div class="items">
+<a class="it" href="the-pipeline.html"><span class="k">Standalone</span><b>The Pipeline</b><small>Overlap instructions, then break the pipeline with dependencies and unpredictable branches.</small></a>
+<a class="it" href="guess-the-branch.html"><span class="k">Standalone</span><b>Guess the Branch</b><small>Predict branches yourself against the chip’s two-bit predictor.</small></a>
+</div></div>
+<div class="ch" data-text="more than one the lost update interleave two threads by hand to lose an update, then prevent it with a lock." data-kinds="standalone "><div class="chn"><span class="no" style="background:#BE1775">22</span><span>More Than One</span></div><div class="items">
+<a class="it" href="lost-update.html"><span class="k">Standalone</span><b>The Lost Update</b><small>Interleave two threads by hand to lose an update, then prevent it with a lock.</small></a>
+</div></div>
+<div class="ch none" data-text="why gigahertz lies " data-kinds=""><div class="chn"><span class="no" style="background:#BE1775">23</span><span>Why Gigahertz Lies</span></div><div class="items"><small style="color:var(--soft)">No interactive for this chapter.</small></div></div>
+<div class="ch" data-text="everything else on the board poll, interrupt, or hand off compare three ways a processor can serve a keyboard while it works." data-kinds="standalone "><div class="chn"><span class="no" style="background:#BE1775">24</span><span>Everything Else on the Board</span></div><div class="items">
+<a class="it" href="poll-interrupt-dma.html"><span class="k">Standalone</span><b>Poll, Interrupt, or Hand Off</b><small>Compare three ways a processor can serve a keyboard while it works.</small></a>
+</div></div>
+</section>
+<section class="part" id="p5" style="background:#FAE4E0"><h2>Part Five<b>The Memory Hierarchy</b></h2>
+<div class="ch none" data-text="the distance problem " data-kinds=""><div class="chn"><span class="no" style="background:#BE3017">25</span><span>The Distance Problem</span></div><div class="items"><small style="color:var(--soft)">No interactive for this chapter.</small></div></div>
+<div class="ch" data-text="the cache and the bet you are the cache choose what to evict, then see how lru, fifo and the ideal policy would have done. walking the grid walk a grid row by row and column by column, and find the cache cliff." data-kinds="standalone "><div class="chn"><span class="no" style="background:#BE3017">26</span><span>The Cache and the Bet</span></div><div class="items">
+<a class="it" href="you-are-the-cache.html"><span class="k">Standalone</span><b>You Are the Cache</b><small>Choose what to evict, then see how LRU, FIFO and the ideal policy would have done.</small></a>
+<a class="it" href="walking-the-grid.html"><span class="k">Standalone</span><b>Walking the Grid</b><small>Walk a grid row by row and column by column, and find the cache cliff.</small></a>
+</div></div>
+<div class="ch none" data-text="where programs live " data-kinds=""><div class="chn"><span class="no" style="background:#BE3017">27</span><span>Where Programs Live</span></div><div class="items"><small style="color:var(--soft)">No interactive for this chapter.</small></div></div>
+<div class="ch" data-text="persistence pull the plug cut the power in the middle of a save on a plain and a journaled filesystem." data-kinds="standalone "><div class="chn"><span class="no" style="background:#BE3017">28</span><span>Persistence</span></div><div class="items">
+<a class="it" href="pull-the-plug.html"><span class="k">Standalone</span><b>Pull the Plug</b><small>Cut the power in the middle of a save on a plain and a journaled filesystem.</small></a>
+</div></div>
+</section>
+<section class="part" id="p6" style="background:#FAF6E0"><h2>Part Six<b>Software</b></h2>
+<div class="ch" data-text="instructions humans can stand the tiny compiler text to tree to your machine’s instructions to bytes." data-kinds="workbench"><div class="chn"><span class="no" style="background:#BEA717">29</span><span>Instructions Humans Can Stand</span></div><div class="items">
+<a class="it wb" href="workbench.html#COMPILE"><span class="k">Workbench · Software</span><b>The tiny compiler</b><small>Text to tree to your machine’s instructions to bytes.</small></a>
+</div></div>
+<div class="ch" data-text="the shapes data takes follow the pointer arrays against linked lists in memory, with and without a cache." data-kinds="standalone "><div class="chn"><span class="no" style="background:#BEA717">30</span><span>The Shapes Data Takes</span></div><div class="items">
+<a class="it" href="follow-the-pointer.html"><span class="k">Standalone</span><b>Follow the Pointer</b><small>Arrays against linked lists in memory, with and without a cache.</small></a>
+</div></div>
+<div class="ch" data-text="some solutions collapse the sorting race race four sorting methods and watch growth rates turn into geometry." data-kinds="standalone "><div class="chn"><span class="no" style="background:#BEA717">31</span><span>Some Solutions Collapse</span></div><div class="items">
+<a class="it" href="the-sorting-race.html"><span class="k">Standalone</span><b>The Sorting Race</b><small>Race four sorting methods and watch growth rates turn into geometry.</small></a>
+</div></div>
+<div class="ch" data-text="getting it wrong find the fault debug a friend’s broken computer with a probe and a single-step clock." data-kinds="workbench"><div class="chn"><span class="no" style="background:#BEA717">32</span><span>Getting It Wrong</span></div><div class="items">
+<a class="it wb" href="workbench.html#FAULT"><span class="k">Workbench · CPU</span><b>Find the fault</b><small>Debug a friend’s broken computer with a probe and a single-step clock.</small></a>
+</div></div>
+<div class="ch none" data-text="layers, libraries and the software nobody wrote twice " data-kinds=""><div class="chn"><span class="no" style="background:#BEA717">33</span><span>Layers, Libraries and the Software Nobody Wrote Twice</span></div><div class="items"><small style="color:var(--soft)">No interactive for this chapter.</small></div></div>
+</section>
+<section class="part" id="p7" style="background:#EBFAE0"><h2>Part Seven<b>The Operating System</b></h2>
+<div class="ch" data-text="coming up from nothing cold start memory wakes up as noise. write the boot monitor that brings the machine up." data-kinds="workbench"><div class="chn"><span class="no" style="background:#5EBE17">34</span><span>Coming Up From Nothing</span></div><div class="items">
+<a class="it wb" href="workbench.html#BOOT"><span class="k">Workbench · CPU</span><b>Cold start</b><small>Memory wakes up as noise. Write the boot monitor that brings the machine up.</small></a>
+</div></div>
+<div class="ch" data-text="the convenient lie translating an address turn a program’s made-up address into a real one; meet page faults and thrashing." data-kinds="standalone "><div class="chn"><span class="no" style="background:#5EBE17">35</span><span>The Convenient Lie</span></div><div class="items">
+<a class="it" href="translating-an-address.html"><span class="k">Standalone</span><b>Translating an Address</b><small>Turn a program’s made-up address into a real one; meet page faults and thrashing.</small></a>
+</div></div>
+<div class="ch none" data-text="what happens when you double-click " data-kinds=""><div class="chn"><span class="no" style="background:#5EBE17">36</span><span>What Happens When You Double-Click</span></div><div class="items"><small style="color:var(--soft)">No interactive for this chapter.</small></div></div>
+<div class="ch" data-text="taking turns the scheduler’s desk schedule four jobs three ways and feel the trade-off between responsiveness and throughput." data-kinds="standalone "><div class="chn"><span class="no" style="background:#5EBE17">37</span><span>Taking Turns</span></div><div class="items">
+<a class="it" href="scheduler-desk.html"><span class="k">Standalone</span><b>The Scheduler’s Desk</b><small>Schedule four jobs three ways and feel the trade-off between responsiveness and throughput.</small></a>
+</div></div>
+<div class="ch" data-text="the kernel and the wall knock on the wall try to break out of user mode, then ask the kernel nicely with a system call." data-kinds="standalone "><div class="chn"><span class="no" style="background:#5EBE17">38</span><span>The Kernel and the Wall</span></div><div class="items">
+<a class="it" href="knock-on-the-wall.html"><span class="k">Standalone</span><b>Knock on the Wall</b><small>Try to break out of user mode, then ask the kernel nicely with a system call.</small></a>
+</div></div>
+<div class="ch" data-text="everything is a file, except when it isn&#x27;t a filesystem on a blank disk create, grow and delete files on an empty disk and see what a delete really does." data-kinds="standalone "><div class="chn"><span class="no" style="background:#5EBE17">39</span><span>Everything Is a File, Except When It Isn&#x27;t</span></div><div class="items">
+<a class="it" href="filesystem-blank-disk.html"><span class="k">Standalone</span><b>A Filesystem on a Blank Disk</b><small>Create, grow and delete files on an empty disk and see what a delete really does.</small></a>
+</div></div>
+</section>
+<section class="part" id="p8" style="background:#E0FAE7"><h2>Part Eight<b>Machines Talking</b></h2>
+<div class="ch" data-text="cutting the message up two machines, one wire send a byte down a single wire and see what happens when the two ends disagree on speed. packet routing cut links, flood a network of twelve routers, and watch packets find their way." data-kinds="standalone "><div class="chn"><span class="no" style="background:#17BE47">40</span><span>Cutting the Message Up</span></div><div class="items">
+<a class="it" href="two-machines-one-wire.html"><span class="k">Standalone</span><b>Two Machines, One Wire</b><small>Send a byte down a single wire and see what happens when the two ends disagree on speed.</small></a>
+<a class="it" href="packet-routing.html"><span class="k">Standalone</span><b>Packet Routing</b><small>Cut links, flood a network of twelve routers, and watch packets find their way.</small></a>
+</div></div>
+<div class="ch" data-text="promises over an unreliable wire the promise keeper add numbering, acknowledgements, resending and windows to turn a lossy link into a reliable one." data-kinds="standalone "><div class="chn"><span class="no" style="background:#17BE47">41</span><span>Promises Over an Unreliable Wire</span></div><div class="items">
+<a class="it" href="promise-keeper.html"><span class="k">Standalone</span><b>The Promise Keeper</b><small>Add numbering, acknowledgements, resending and windows to turn a lossy link into a reliable one.</small></a>
+</div></div>
+<div class="ch" data-text="names the waterfall see where page-load time really goes, and why more bandwidth barely helps." data-kinds="standalone "><div class="chn"><span class="no" style="background:#17BE47">42</span><span>Names</span></div><div class="items">
+<a class="it" href="the-waterfall.html"><span class="k">Standalone</span><b>The Waterfall</b><small>See where page-load time really goes, and why more bandwidth barely helps.</small></a>
+</div></div>
+<div class="ch" data-text="finding things among billions split brain cut the link between two replicas and choose between staying available and staying consistent." data-kinds="standalone "><div class="chn"><span class="no" style="background:#17BE47">43</span><span>Finding Things Among Billions</span></div><div class="items">
+<a class="it" href="split-brain.html"><span class="k">Standalone</span><b>Split Brain</b><small>Cut the link between two replicas and choose between staying available and staying consistent.</small></a>
+</div></div>
+</section>
+<section class="part" id="p9" style="background:#E0FAFA"><h2>Part Nine<b>The World That Followed</b></h2>
+<div class="ch none" data-text="the machine on the desk " data-kinds=""><div class="chn"><span class="no" style="background:#17BEBE">44</span><span>The Machine on the Desk</span></div><div class="items"><small style="color:var(--soft)">No interactive for this chapter.</small></div></div>
+<div class="ch" data-text="from numbers to light one pixel per worker race a cpu against a gpu colouring a triangle, then break the gpu with a branch." data-kinds="standalone "><div class="chn"><span class="no" style="background:#17BEBE">45</span><span>From Numbers to Light</span></div><div class="items">
+<a class="it" href="one-pixel-per-worker.html"><span class="k">Standalone</span><b>One Pixel Per Worker</b><small>Race a CPU against a GPU colouring a triangle, then break the GPU with a branch.</small></a>
+</div></div>
+<div class="ch none" data-text="buildings full of computers " data-kinds=""><div class="chn"><span class="no" style="background:#17BEBE">46</span><span>Buildings Full of Computers</span></div><div class="items"><small style="color:var(--soft)">No interactive for this chapter.</small></div></div>
+<div class="ch" data-text="learning from data a neuron by hand set a neuron’s three knobs yourself, then watch it learn the same line by arithmetic." data-kinds="standalone "><div class="chn"><span class="no" style="background:#17BEBE">47</span><span>Learning From Data</span></div><div class="items">
+<a class="it" href="neuron-by-hand.html"><span class="k">Standalone</span><b>A Neuron by Hand</b><small>Set a neuron’s three knobs yourself, then watch it learn the same line by arithmetic.</small></a>
+</div></div>
+<div class="ch" data-text="the whole machine the whole machine zoom from the finished computer down to transistors; take away the build manual and rom images." data-kinds="workbench"><div class="chn"><span class="no" style="background:#17BEBE">48</span><span>The Whole Machine</span></div><div class="items">
+<a class="it wb" href="workbench.html#WHOLE"><span class="k">Workbench · Software</span><b>The whole machine</b><small>Zoom from the finished computer down to transistors; take away the build manual and ROM images.</small></a>
+</div></div>
+</section>
+<section id="bench"><h2>The Workbench</h2><p class="s">One connected build in five stations. Each challenge needs the part you built before it, so the order matters; the Workbench keeps your progress in your own browser. The links below open that challenge if it is unlocked, otherwise the Workbench opens where you left off.</p><a class="big" href="workbench.html">Open the Workbench →</a><div class="stations">
+<div class="st"><h3><i>STATION 1</i>Gates</h3><p>Start with one NAND gate and build every other gate from it.</p>
+<a href="workbench.html#NOT"><b>Ch 14</b>Build NOT<br><small>Make a NAND gate invert its input.</small></a>
+<a href="workbench.html#AND"><b>Ch 14</b>Build AND<br><small>Undo the “not” in NAND.</small></a>
+<a href="workbench.html#OR"><b>Ch 14</b>Build OR<br><small>Meet De Morgan’s law by inverting everything.</small></a>
+<a href="workbench.html#XOR"><b>Ch 14</b>Build XOR<br><small>The hard one: “different”, in four NANDs if you can.</small></a>
+<a href="workbench.html#MUX"><b>Ch 14</b>Build a selector<br><small>A switch controlled by a signal, the part a processor routes data with.</small></a>
+</div>
+<div class="st"><h3><i>STATION 2</i>Adder</h3><p>Turn logic into arithmetic, then watch the carry crawl.</p>
+<a href="workbench.html#HALF"><b>Ch 15</b>Build a half adder<br><small>Add two bits: a sum and a carry.</small></a>
+<a href="workbench.html#FULL"><b>Ch 15</b>Build a full adder<br><small>One column of long addition, with a carry in.</small></a>
+<a href="workbench.html#RACE"><b>Ch 15</b>The ripple race<br><small>Eight of your adders in a row: watch the wrong answers before the right one, and subtract.</small></a>
+</div>
+<div class="st"><h3><i>STATION 3</i>Memory</h3><p>Build memory out of a loop, then a register, then a RAM.</p>
+<a href="workbench.html#LATCH"><b>Ch 16</b>Build a latch<br><small>Make two gates hold each other in place.</small></a>
+<a href="workbench.html#DLATCH"><b>Ch 16</b>Build a D latch<br><small>One input to store, one door to open.</small></a>
+<a href="workbench.html#DFF"><b>Ch 16</b>Build a flip-flop<br><small>Two latches that are never open together: capture at one instant only.</small></a>
+<a href="workbench.html#COUNTER"><b>Ch 16</b>Clock the counter<br><small>Your adder and your flip-flops in a loop: speed the clock up until it breaks.</small></a>
+<a href="workbench.html#DECODE"><b>Ch 16</b>Build a decoder<br><small>Turn a 2-bit address into one wire out of four.</small></a>
+<a href="workbench.html#RAM"><b>Ch 16</b>Build a memory<br><small>Four registers, a decoder and a write button.</small></a>
+</div>
+<div class="st"><h3><i>STATION 4</i>CPU</h3><p>Put your parts around a bus, write the control ROM, and bring the machine up.</p>
+<a href="workbench.html#CPU"><b>Ch 18</b>Watch the machine<br><small>Step through programs on a processor made of your own parts.</small></a>
+<a href="workbench.html#ROM"><b>Ch 18</b>Write the control ROM<br><small>Fill in which switches close at each step of each instruction. Exports real EEPROM images.</small></a>
+<a href="workbench.html#ISA"><b>Ch 19</b>The bit budget<br><small>Divide eight bits between instruction and address, and run out.</small></a>
+<a href="workbench.html#HAND"><b>Ch 19</b>Assemble by hand<br><small>Turn assembly into the switch positions you will set on the bench.</small></a>
+<a href="workbench.html#FAULT"><b>Ch 32</b>Find the fault<br><small>Debug a friend’s broken computer with a probe and a single-step clock.</small></a>
+<a href="workbench.html#BOOT"><b>Ch 34</b>Cold start<br><small>Memory wakes up as noise. Write the boot monitor that brings the machine up.</small></a>
+</div>
+<div class="st"><h3><i>STATION 5</i>Software</h3><p>Program your own machine in a language, then see the whole computer.</p>
+<a href="workbench.html#COMPILE"><b>Ch 29</b>The tiny compiler<br><small>Text to tree to your machine’s instructions to bytes.</small></a>
+<a href="workbench.html#WHOLE"><b>Ch 48</b>The whole machine<br><small>Zoom from the finished computer down to transistors; take away the build manual and ROM images.</small></a>
+</div>
+</div></section><div class="empty" id="empty">Nothing matches that search.</div>
+<footer>Keep this file in the same folder as the interactive pages so the links work, whether you open it from disk or from a website. Only the web fonts need an internet connection; everything else runs offline. Nothing is sent anywhere.</footer>
+<script>
+const rows=[...document.querySelectorAll('.ch')],parts=[...document.querySelectorAll('section.part')],bench=document.getElementById('bench');let kind='all';
+function apply(){const q=document.getElementById('q').value.trim().toLowerCase(),showNone=document.getElementById('none').checked;let any=0;
+rows.forEach(r=>{const none=r.classList.contains('none');let ok;
+ if(none){ok=showNone&&kind==='all'&&(!q||r.dataset.text.includes(q));}
+ else{ok=(kind==='all'||r.dataset.kinds.includes(kind))&&(!q||r.dataset.text.includes(q));}
+ r.style.display=ok?'':'none';if(ok&&!none)any++;
+ if(!none&&ok)r.querySelectorAll('.it').forEach(it=>{const w=it.classList.contains('wb');it.style.display=(kind==='standalone'&&w)||(kind==='workbench'&&!w)?'none':'';});});
+parts.forEach(p=>{p.style.display=[...p.querySelectorAll('.ch')].some(r=>r.style.display!=='none')?'':'none';});
+bench.style.display=(kind==='standalone'||(q&&!'workbench station gates adder memory cpu software nand'.includes(q)))?'none':'';
+document.getElementById('empty').style.display=any?'none':'block';}
+document.getElementById('q').addEventListener('input',apply);document.getElementById('none').addEventListener('change',apply);
+document.querySelectorAll('[data-k]').forEach(b=>b.addEventListener('click',()=>{kind=b.dataset.k;document.querySelectorAll('[data-k]').forEach(x=>x.classList.toggle('on',x===b));apply();}));apply();
+</script></div></body></html>

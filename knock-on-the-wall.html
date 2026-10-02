@@ -1,0 +1,116 @@
+<meta charset="utf-8">
+<!-- Knock on the Wall — Switches All the Way Down, Chapter 38 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--red)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:10px 14px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.stage{display:grid;grid-template-columns:1fr 90px 1fr;gap:12px;align-items:stretch}
+.side{border-radius:12px;padding:14px}
+.user{background:#FDEFE0;border:2px solid var(--orange)}
+.kernel{background:#E4F0FA;border:2px solid var(--cyan)}
+.side h3{margin:0 0 8px;font-size:15px}
+.privbit{text-align:center;display:flex;flex-direction:column;justify-content:center}
+.ff{width:70px;height:70px;border-radius:12px;border:3px solid var(--ink);display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:28px;font-weight:800;margin:0 auto}
+.ff.priv{background:var(--cyan);color:#fff;border-color:var(--cyan)}.ff.unpriv{background:#fff}
+.act{width:100%;text-align:left;margin:5px 0;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;font-weight:600;font-size:14px}
+.act:hover{border-color:var(--orange)}
+.wall{width:8px;background:repeating-linear-gradient(45deg,#1A1C2A,#1A1C2A 6px,#5B6172 6px,#5B6172 12px);border-radius:4px;margin:0 auto;height:100%}
+.log{min-height:80px;margin-top:10px}
+.entry{border-radius:8px;padding:8px 12px;margin:5px 0;font-size:14px}
+.entry.trap{background:#FBDADA;border:1px solid #F0B0B0;color:#8A1A1A;font-weight:600}
+.entry.ok{background:#E4F6EE;border:1px solid #B7E4CE}
+.entry.call{background:#EEE8FB;border:1px solid #D3C4F3}
+.note{background:#E4F6EE;border:1px solid #B7E4CE;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.stage{grid-template-columns:1fr}.wall{height:8px;width:100%}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Knock on the <span>wall</span></h1>
+  <p>An ordinary program is walled off from the machine’s dangerous powers: it cannot touch the disk, the screen, or another program’s memory directly. Only the kernel can, and a single bit in the processor decides who you are. Try to break out, then ask nicely instead.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="stage">
+      <div class="side user">
+        <h3 style="color:var(--orange)">Your program (user mode)</h3>
+        <p style="font-size:13px;color:var(--soft);margin:0 0 8px">It can do arithmetic and touch its own memory. For anything else, it must go through the kernel.</p>
+        <button class="act" data-a="add">Add two numbers in my own memory</button>
+        <button class="act" data-a="disk">Write straight to the disk</button>
+        <button class="act" data-a="other">Read another program’s memory</button>
+        <button class="act" data-a="screen">Write straight to the screen hardware</button>
+        <button class="act" data-a="priv">Flip the privilege bit myself</button>
+        <hr style="border:none;border-top:1px solid var(--line);margin:10px 0">
+        <button class="act" data-a="syscall" style="border-color:var(--cyan);background:#E4F0FA">Ask the kernel to save my file (system call)</button>
+      </div>
+      <div class="privbit">
+        <div style="font-size:13px;color:var(--soft);margin-bottom:6px">privilege bit</div>
+        <div class="ff unpriv" id="pbit">0</div>
+        <div style="font-size:12px;color:var(--soft);margin-top:6px" id="mode">user mode</div>
+      </div>
+      <div class="side kernel">
+        <h3 style="color:var(--cyan)">The kernel (privileged mode)</h3>
+        <p style="font-size:13px;color:var(--soft);margin:0">The only code allowed to touch hardware. It runs with the privilege bit set to 1, checks every request, and does the dangerous part on your behalf — or refuses.</p>
+        <div id="kernelact" style="margin-top:8px"></div>
+      </div>
+    </div>
+    <div class="log" id="log"></div>
+  </section>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+let priv=0, seen={}, busy=false;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function setPriv(v){ priv=v; const b=$('#pbit'); b.textContent=v; b.className='ff '+(v?'priv':'unpriv'); $('#mode').textContent=v?'privileged mode':'user mode'; }
+async function trap(msg,kmsg){
+  log('trap',`<b>Trap!</b> ${msg} The processor slams the door: it switches to the kernel, which sees an illegal instruction.`);
+  await sleep(600); setPriv(1); $('#kernelact').innerHTML='<div class="entry" style="background:#fff">Kernel now running (bit = 1)</div>';
+  await sleep(500); log('ok',kmsg); await sleep(400); setPriv(0); $('#kernelact').innerHTML='';
+}
+async function act(a){
+  if(busy) return; busy=true;
+  if(a==='add'){ log('ok','The program added two numbers in its own memory. No wall involved — arithmetic and your own memory need no permission. This is the 99% of what programs do.'); find('add'); }
+  else if(a==='disk'){ await trap('A user-mode program tried to command the disk controller directly.','The kernel refuses and kills the program. If any program could write any disk block, there would be no such thing as a file it could not destroy.'); find('trap'); }
+  else if(a==='other'){ await trap('The program tried to read memory the address translator never mapped for it.','The kernel reports a segmentation fault. This is the same wall you saw in address translation, from the other side.'); find('trap'); }
+  else if(a==='screen'){ await trap('The program tried to write the screen hardware directly.','Refused. On early machines without this wall, any program could scribble anywhere, and one bug took down the whole computer.'); find('trap'); }
+  else if(a==='priv'){ await trap('The program tried to set the privilege bit to 1 to promote itself.','Refused — and this is the keystone. If a program could set that bit, the whole wall would be worthless. The bit can only be set by the hardware itself, when it jumps into the kernel through a controlled door.'); find('priv'); }
+  else if(a==='syscall'){
+    log('call','The program executes a special “system call” instruction. This is the one legal door: it does not touch hardware itself, it asks.');
+    await sleep(600); setPriv(1); $('#kernelact').innerHTML='<div class="entry call">Kernel entered through the system-call door (bit = 1)</div>';
+    await sleep(500); $('#kernelact').innerHTML+='<div class="entry">1. Check: is this program allowed to write this file? ✓</div>'; await sleep(500);
+    $('#kernelact').innerHTML+='<div class="entry">2. The kernel — and only the kernel — commands the disk.</div>'; await sleep(600);
+    log('ok','The file is saved. The program got its wish without ever touching the hardware. Every open(), read(), write() and print you have ever called is a knock on this door.');
+    await sleep(400); setPriv(0); $('#kernelact').innerHTML=''; find('syscall');
+  }
+  busy=false; renderQs();
+}
+function log(cls,msg){ $('#log').innerHTML=`<div class="entry ${cls}">${msg}</div>`+$('#log').innerHTML; }
+document.querySelector('.stage').addEventListener('click',e=>{ const b=e.target.closest('[data-a]'); if(b) act(b.dataset.a); });
+const FINDS=[
+ ['add','Do something a program is allowed to do on its own.'],
+ ['trap','Try to touch hardware directly. What stops you?'],
+ ['priv','Try to promote yourself by flipping the privilege bit.'],
+ ['syscall','Ask the kernel to do it for you, the proper way.']];
+const TELL={
+ add:'Arithmetic and access to your own memory are unprivileged: they need no permission because they cannot harm anyone else. The wall only stands between a program and the things that could damage other programs or the machine.',
+ trap:'The privilege bit is the whole mechanism. When it is 0, the instructions that touch hardware are simply illegal, and attempting one traps into the kernel instead of executing. The wall is not a wrapper of checks in software — it is enforced by the processor on every single instruction, for free.',
+ priv:'This is why the wall holds. The one thing a user program must never be able to do is set its own privilege bit, so the hardware forbids exactly that. The bit flips to 1 only when the processor itself jumps to the kernel through a fixed entry point. Take away this one rule and every other protection collapses.',
+ syscall:'The system call is the door in the wall. The program cannot open the disk, but it can run one special instruction that transfers control to the kernel at a fixed, trusted address, with the privilege bit set for it. The kernel checks the request, does the dangerous part, and returns. Isolation with cooperation: that is what an operating system is.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+setPriv(0); renderQs();
+</script>

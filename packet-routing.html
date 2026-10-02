@@ -1,0 +1,144 @@
+<meta charset="utf-8">
+<!-- Packet Routing — Switches All the Way Down, Chapter 40 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1200px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--cyan)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.cyan{background:var(--cyan);color:#fff;border-color:var(--cyan)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:170px 1fr 90px;gap:10px;align-items:center;margin:3px 0}
+.sl input{accent-color:var(--pink)} .sl b{font-family:"JetBrains Mono",monospace;color:var(--orange);text-align:right}
+canvas#net{display:block;width:100%;height:auto;background:#FAFBFE;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:22px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.arr{display:flex;flex-wrap:wrap;gap:4px;min-height:34px}
+.chip{min-width:34px;text-align:center;border-radius:6px;padding:3px 4px;font-family:"JetBrains Mono",monospace;font-size:13px;font-weight:700;background:#E4F6EE;border:1px solid #B7E4CE}
+.chip.ooo{background:#FDEFE0;border-color:var(--orange);color:#8A3A00}
+.chip.miss{background:#fff;border:2px dashed var(--red);color:var(--red)}
+.note{background:#E4F0FA;border:1px solid #B9D8EE;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Packet <span>routing</span></h1>
+  <p>No router knows the whole path. Each one looks at where a packet is going, picks the neighbour that is closest to it, and passes it on. Out of thousands of such local decisions comes a delivery. Cut links, flood the network, and watch what survives.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar"><span style="color:var(--soft)">Click to:</span>
+      <button class="btn on" data-tool="link">cut / restore a link</button><button class="btn" data-tool="src">set the source</button><button class="btn" data-tool="dst">set the destination</button>
+      <span style="flex:1"></span><button class="btn" id="mode">Routing: each packet decides</button><button class="btn cyan" id="start">Send 60 packets</button></div>
+    <div class="sl" style="margin-top:8px"><span>Link capacity (per tick)</span><input type="range" id="cap" min="1" max="4" value="2"><b id="capv"></b></div>
+    <div class="sl"><span>Traffic (packets per tick)</span><input type="range" id="rate" min="1" max="12" value="3"><b id="ratev"></b></div>
+    <canvas id="net" width="900" height="470" style="margin-top:8px" aria-label="Network of twelve routers"></canvas>
+    <div class="bar" style="font-size:13px;color:var(--soft);gap:14px;margin-top:6px"><span><b style="color:#0090C8">●</b> packet (its number)</span><span><b style="color:#E8A400">▮</b> waiting in a router’s queue</span><span style="color:#E23A3A">╌ link down</span><span id="conv"></span></div>
+  </section>
+  <div class="read" id="read"></div>
+  <section class="card"><h2>What the destination received, in the order it arrived</h2><div class="arr" id="arr"></div>
+    <div style="font-size:13px;color:var(--soft);margin-top:6px"><span style="color:#12A66E">green</span>: arrived in order · <span style="color:#E8620A">orange</span>: arrived after a later packet had already come (out of order) · <span style="color:#E23A3A">dashed red</span>: never arrived</div></section>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), NR=3, NC=4, TOTAL=60, QCAP=5, CONV=10, TICK=420;
+const nodes=[...Array(NR*NC)].map((_,i)=>({id:i,x:120+(i%NC)*220,y:90+Math.floor(i/NC)*145,name:String.fromCharCode(65+i)}));
+const links=[]; const adj=nodes.map(()=>[]);
+function addLink(a,b){ const l={a,b,up:true,believed:true,timer:0,lat:((a*7+b*3)%3)===0?2:1}; links.push(l); adj[a].push({v:b,l}); adj[b].push({v:a,l}); }
+for(let r=0;r<NR;r++)for(let c=0;c<NC;c++){ const i=r*NC+c; if(c<NC-1) addLink(i,i+1); if(r<NR-1) addLink(i,i+NC); }
+let src=0, dst=11, tool='link', mode='per', seen={}, sim=null, running=false, lastTick=0, rafId=null, cutDuring=false, deliveredAtCut=0;
+const key=(u,v)=>u+'>'+v;
+function bfs(dest){ const d=Array(nodes.length).fill(Infinity); d[dest]=0; const q=[dest]; while(q.length){ const u=q.shift(); adj[u].forEach(({v,l})=>{ if(l.believed&&d[v]===Infinity){ d[v]=d[u]+1; q.push(v); } }); } return d; }
+function newSim(){
+  const dist=bfs(dst); let path=null;
+  if(dist[src]!==Infinity){ path=[src]; let u=src; while(u!==dst){ const nx=adj[u].filter(({v,l})=>l.believed&&dist[v]<dist[u]).sort((a,b)=>a.v-b.v)[0]; path.push(nx.v); u=nx.v; } }
+  return {tick:0,acc:0,nextSeq:1,queues:{},transit:[],arrivals:[],dropQ:0,lostDead:0,noRoute:0,dist,path,done:false,missing:[],maxSeen:0,ooo:0,drops:0};
+}
+function nextHop(u){
+  if(mode==='fixed'){ if(!sim.path) return -1; const i=sim.path.indexOf(u); return i>=0&&i<sim.path.length-1?sim.path[i+1]:-1; }
+  const d=sim.dist; let best=[], bq=1e9;
+  adj[u].forEach(({v,l})=>{ if(!l.believed||!(d[v]<d[u])) return; const ql=(sim.queues[key(u,v)]||[]).length; if(ql<bq){ best=[v]; bq=ql; } else if(ql===bq) best.push(v); });
+  return best.length?best[Math.floor(Math.random()*best.length)]:-1;
+}
+function enqueue(u,pkt){ const w=nextHop(u); if(w<0){ sim.noRoute++; return; } const k=key(u,w), q=sim.queues[k]||(sim.queues[k]=[]); if(q.length>=QCAP){ sim.dropQ++; sim.lastDrop=sim.tick; return; } q.push(pkt); }
+function tick(){
+  if(!sim||sim.done) return; sim.tick++;
+  links.forEach(l=>{ if(l.timer>0){ l.timer--; if(l.timer===0){ l.believed=l.up; sim.dist=bfs(dst); } } });
+  const rate=+$('#rate').value, cap=+$('#cap').value;
+  sim.acc+=rate; while(sim.acc>=1&&sim.nextSeq<=TOTAL){ sim.acc--; enqueue(src,{seq:sim.nextSeq++}); }
+  Object.keys(sim.queues).forEach(k=>{ const [u,v]=k.split('>').map(Number), l=adj[u].find(x=>x.v===v).l, q=sim.queues[k]; for(let i=0;i<cap&&q.length;i++){ const p=q.shift(); if(!l.up){ sim.lostDead++; } else sim.transit.push({p,u,v,l,rem:l.lat,tot:l.lat}); } });
+  const still=[]; sim.transit.forEach(t=>{ if(!t.l.up){ sim.lostDead++; return; } t.rem--; if(t.rem>0){ still.push(t); return; }
+    if(t.v===dst){ const s=t.p.seq; const ooo=s<sim.maxSeen; sim.maxSeen=Math.max(sim.maxSeen,s); if(ooo) sim.ooo++; sim.arrivals.push({s,ooo}); } else enqueue(t.v,t.p); });
+  sim.transit=still;
+  const empty=!sim.transit.length&&Object.values(sim.queues).every(q=>!q.length);
+  if(sim.nextSeq>TOTAL&&empty){ sim.done=true; running=false; const got=new Set(sim.arrivals.map(a=>a.s)); sim.missing=[...Array(TOTAL)].map((_,i)=>i+1).filter(s=>!got.has(s)); finish(); }
+  checkFinds();
+}
+function finish(){ if(sim.missing.length===0&&sim.ooo>0) find('reorder'); }
+function checkFinds(){
+  if(!sim) return;
+  if(cutDuring&&sim.arrivals.length>deliveredAtCut+4&&mode==='per') find('cut');
+  if(sim.dropQ>0) find('congest');
+  if(sim.ooo>0&&sim.arrivals.length>10) find('reorder');
+  if(mode==='fixed'&&cutDuring&&sim.tick>deliveredAtCut&&sim.arrivals.length===deliveredAtCut&&sim.tick>40) find('fixed');
+}
+// ---------- drawing ----------
+function draw(now){
+  const cv=$('#net'), g=cv.getContext('2d'); g.clearRect(0,0,cv.width,cv.height);
+  const frac=running?Math.min(1,(now-lastTick)/TICK):0;
+  links.forEach(l=>{ const a=nodes[l.a], b=nodes[l.b]; g.strokeStyle=l.up?(l.believed?'#C9CDDA':'#E8A400'):'#E23A3A'; g.lineWidth=l.up?6:4; g.setLineDash(l.up?[]:[8,7]); g.beginPath(); g.moveTo(a.x,a.y); g.lineTo(b.x,b.y); g.stroke(); g.setLineDash([]);
+    if(l.lat===2){ g.fillStyle='#8A93A8'; g.font='11px Barlow'; g.fillText('slow',(a.x+b.x)/2-12,(a.y+b.y)/2-8); } });
+  nodes.forEach(n=>{ const isS=n.id===src, isD=n.id===dst; g.fillStyle='#fff'; g.strokeStyle=isS?'#12A66E':isD?'#E5197B':'#1A1C2A'; g.lineWidth=isS||isD?5:2.5; g.beginPath(); g.arc(n.x,n.y,26,0,7); g.fill(); g.stroke();
+    g.fillStyle='#1A1C2A'; g.font='bold 16px Barlow'; g.textAlign='center'; g.fillText(n.name,n.x,n.y+6); if(isS||isD){ g.fillStyle=isS?'#12A66E':'#E5197B'; g.font='bold 11px Barlow'; g.fillText(isS?'SOURCE':'DEST',n.x,n.y-34); } g.textAlign='left';
+    if(sim){ let qn=0; Object.keys(sim.queues).forEach(k=>{ if(+k.split('>')[0]===n.id) qn+=sim.queues[k].length; }); for(let i=0;i<qn;i++){ g.fillStyle=qn>=QCAP*1.5?'#E23A3A':'#E8A400'; g.fillRect(n.x+30,n.y+22-i*7,12,5); } } });
+  if(sim) sim.transit.forEach(t=>{ const a=nodes[t.u], b=nodes[t.v], prog=Math.min(1,(t.tot-t.rem+frac)/t.tot), x=a.x+(b.x-a.x)*prog, y=a.y+(b.y-a.y)*prog;
+    g.fillStyle='#0090C8'; g.beginPath(); g.arc(x,y,11,0,7); g.fill(); g.fillStyle='#fff'; g.font='bold 10px JetBrains Mono'; g.textAlign='center'; g.fillText(t.p.seq,x,y+4); g.textAlign='left'; });
+  rafId=requestAnimationFrame(draw);
+}
+function panels(){
+  const s=sim; const delivered=s?new Set(s.arrivals.map(a=>a.s)).size:0;
+  $('#read').innerHTML=`<div><small>Sent so far</small><b>${s?s.nextSeq-1:0}</b><small>of ${TOTAL}</small></div><div><small>Delivered</small><b style="color:var(--green)">${delivered}</b></div><div><small>Dropped: queue full</small><b style="color:var(--orange)">${s?s.dropQ:0}</b></div><div><small>Lost: dead link</small><b style="color:var(--red)">${s?s.lostDead+s.noRoute:0}</b></div><div><small>Arrived out of order</small><b>${s?s.ooo:0}</b></div>`;
+  $('#arr').innerHTML=(s?s.arrivals.map(a=>`<div class="chip ${a.ooo?'ooo':''}">${a.s}</div>`).join(''):'')+(s&&s.done?s.missing.map(m=>`<div class="chip miss">${m}</div>`).join(''):'');
+  const pending=links.some(l=>l.timer>0); $('#conv').innerHTML=pending?'<b style="color:#E8A400">⟳ routers are still learning about the change…</b>':'';
+  $('#capv').textContent=$('#cap').value; $('#ratev').textContent=$('#rate').value;
+}
+function loop(now){ if(running&&now-lastTick>=TICK){ tick(); lastTick=now; } panels(); requestAnimationFrame(loop); }
+// ---------- interaction ----------
+$('#net').addEventListener('click',e=>{
+  const r=e.target.getBoundingClientRect(), x=(e.clientX-r.left)/r.width*900, y=(e.clientY-r.top)/r.height*470;
+  if(tool==='src'||tool==='dst'){ const n=nodes.find(n=>Math.hypot(n.x-x,n.y-y)<30); if(n){ if(tool==='src'&&n.id!==dst) src=n.id; if(tool==='dst'&&n.id!==src) dst=n.id; restart(false); } return; }
+  let best=null, bd=14; links.forEach(l=>{ const a=nodes[l.a], b=nodes[l.b], dx=b.x-a.x, dy=b.y-a.y, t=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/(dx*dx+dy*dy))), d=Math.hypot(a.x+dx*t-x,a.y+dy*t-y); if(d<bd){ bd=d; best=l; } });
+  if(best){ best.up=!best.up; best.timer=CONV; if(sim&&running&&!best.up){ cutDuring=true; deliveredAtCut=sim.arrivals.length; find('cutlink'); } }
+});
+function restart(go){ links.forEach(l=>{ l.timer=0; l.believed=l.up; }); sim=newSim(); cutDuring=false; deliveredAtCut=0; running=!!go; lastTick=performance.now(); $('#note').innerHTML=$('#note').innerHTML; }
+document.querySelector('.bar').addEventListener('click',e=>{ const b=e.target.closest('[data-tool]'); if(b){ tool=b.dataset.tool; document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('on',x===b)); } });
+$('#start').onclick=()=>restart(true);
+$('#mode').onclick=()=>{ mode=mode==='per'?'fixed':'per'; $('#mode').textContent=mode==='per'?'Routing: each packet decides':'Routing: one fixed path'; $('#mode').classList.toggle('on',mode==='fixed'); };
+const FINDS=[
+ ['cutlink','Start a transfer, then cut a link on the busy path while packets are flowing.'],
+ ['cut','Keep watching. Does the transfer recover without anyone telling it to?'],
+ ['congest','Raise the traffic above the link capacity. When do packets start being dropped?'],
+ ['reorder','Look at the order the packets arrive in at the destination.'],
+ ['fixed','Switch to “one fixed path”, start, and cut a link on that path.']];
+const TELL={
+ cutlink:'The link goes down at once, but the routers do not know yet: each is working from what it last heard. Packets that were on the wire, or are queued for it, are lost. This is the brief damage window after any failure: the network cannot react faster than news travels.',
+ cut:'After a few ticks the routers learn the link is gone, their tables change, and new packets simply take a different route. Neither the source nor the destination was told anything or did anything. Nobody planned the new path; it emerged from every router making its own local choice with updated information. The few packets lost in between are the cost, and they are the endpoints’ problem, which is exactly what the previous chapter’s acknowledgements are for.',
+ congest:'Each queue holds only a few packets. Drops begin as soon as packets arrive faster than the link can send them for long enough to fill the queue, which is well before the link is “full” on average: bursts do the damage. A network has no way to ask a sender to wait, so a full queue simply discards, and the loss is how senders find out to slow down.',
+ reorder:'Packets of the same transfer take different routes, some through slower links and shorter queues, so they do not arrive in the order they left. The network makes no promise about order; it only promises to try. Putting the packets back in order is again the job of the numbers each one carries.',
+ fixed:'With one fixed path there is no recovery: every packet follows the dead route into the dead link, and the transfer stalls until someone chooses a new path by hand. Letting each router decide for each packet is what makes the network resilient, at the price of reordering. The early internet chose resilience deliberately.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+sim=newSim(); renderQs(); requestAnimationFrame(draw); requestAnimationFrame(loop);
+</script>

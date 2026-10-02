@@ -1,0 +1,187 @@
+<meta charset="utf-8">
+<!-- E11 · The Float Ruler — Switches All the Way Down, Chapter 11 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2;--red:#FF3B3B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1220px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--green)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:18px;margin:0 0 8px;font-weight:800}
+.panel{background:var(--night2);border-radius:12px;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:none;border-radius:6px;padding:7px 12px;cursor:pointer;background:var(--night3);color:#fff}
+.btn.pink{background:var(--pink)}.btn.cyan{background:var(--cyan);color:var(--ink)}.btn.sun{background:var(--sun);color:var(--ink)}.btn.green{background:var(--green);color:var(--ink)}.btn.on{outline:3px solid var(--sun)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+input[type=text]{font:inherit;font-family:"JetBrains Mono",monospace;font-size:18px;border:none;border-radius:6px;padding:6px 10px;width:220px}
+input[type=range]{accent-color:var(--pink)}
+canvas{display:block;width:100%;height:auto;border-radius:8px;background:#0F0B2E;touch-action:none;cursor:grab}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.read div{background:var(--night3);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:20px;font-family:"JetBrains Mono",monospace;color:var(--sun);word-break:break-all}
+.read small{color:var(--soft);font-size:12px}
+.bits{font-family:"JetBrains Mono",monospace;font-size:15px;word-break:break-all;background:#0F0B2E;border-radius:8px;padding:8px 10px}
+.bits .s{color:var(--pink)}.bits .e{color:var(--sun)}.bits .m{color:var(--cyan)}
+.exact{font-family:"JetBrains Mono",monospace;font-size:14px;word-break:break-all;background:#fff;color:var(--ink);border-radius:8px;padding:8px 10px}
+.exact .same{color:var(--green);font-weight:700}.exact .diff{color:var(--red);font-weight:700}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--night3);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>The <span>float</span> ruler</h1>
+  <p>A computer cannot store every number, only a fixed set of them. Here they are, drawn as ticks on a ruler. Every other number you type is quietly moved to the nearest tick. Where the ticks sit explains every odd thing floating-point arithmetic ever did to you.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="panel">
+    <h2>1 · A tiny float, every value visible</h2>
+    <div class="bar">
+      <label>Fraction bits <input type="range" id="mb" min="1" max="5" value="3"> <b id="mbv"></b></label>
+      <label>Exponent bits <input type="range" id="eb" min="2" max="4" value="3"> <b id="ebv"></b></label>
+      <button class="btn" id="log">Log scale: off</button>
+      <span style="color:var(--soft);font-size:13px">Scroll to zoom, drag to pan</span><input type="text" id="tnum" value="0.3" style="width:90px;font-size:15px" aria-label="Number to store in the tiny format"><button class="btn green" id="tstore">Store it</button>
+    </div>
+    <canvas id="toy" width="1600" height="300" style="margin-top:8px"></canvas>
+    <div class="read" id="toyread" style="margin-top:8px"></div>
+  </section>
+  <section class="panel">
+    <h2>2 · A real 64-bit double</h2>
+    <div class="bar"><input type="text" id="num" value="0.1" aria-label="A number"><button class="btn cyan" id="look">Look it up</button>
+      <span id="presets"></span></div>
+    <div class="bits" id="bits" style="margin-top:8px"></div>
+    <div class="exact" id="exact" style="margin-top:8px"></div>
+    <canvas id="zoom" width="1600" height="260" style="margin-top:8px;cursor:default"></canvas>
+    <div class="read" id="dread" style="margin-top:8px"></div>
+  </section>
+</main>
+<aside class="panel" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+// ---------- 1. The toy format: sign-less, e exponent bits, m fraction bits, with subnormals ----------
+let M=3,E=3,logScale=false,view=null,drag=null,typed=null;
+function toyValues(){ const bias=(1<<(E-1))-1, v=[0];
+  for(let f=1;f<(1<<M);f++) v.push(f/(1<<M)*Math.pow(2,1-bias));
+  for(let e=1;e<(1<<E)-1;e++) for(let f=0;f<(1<<M);f++) v.push((1+f/(1<<M))*Math.pow(2,e-bias));
+  return v; }
+function drawToy(){
+  const vals=toyValues(), max=vals[vals.length-1], cv=$('#toy'), g=cv.getContext('2d'), Wd=cv.width, Hd=cv.height, x0=40, w=Wd-80;
+  if(!view) view={a:0,b:max*1.05};
+  const lo=logScale?Math.log2(Math.max(view.a,vals[1]/2)):view.a, hi=logScale?Math.log2(view.b):view.b;
+  const X=v=>x0+((logScale?Math.log2(Math.max(v,vals[1]/2)):v)-lo)/(hi-lo)*w;
+  g.clearRect(0,0,Wd,Hd); g.strokeStyle='#6b62b8'; g.lineWidth=3; g.beginPath(); g.moveTo(x0,150); g.lineTo(x0+w,150); g.stroke();
+  // shade each power-of-two band alternately: every band holds the same number of ticks
+  const bias=(1<<(E-1))-1;
+  for(let e=1-bias;e<=(1<<E)-2-bias;e++){ const a=Math.pow(2,e), b=a*2; const xa=X(a), xb=X(Math.min(b,max)); if(xb<x0||xa>x0+w) continue;
+    g.fillStyle=(e&1)?'rgba(255,46,136,.12)':'rgba(0,194,255,.12)'; g.fillRect(Math.max(x0,xa),60,Math.min(x0+w,xb)-Math.max(x0,xa),180);
+    g.fillStyle='#C9C4F2'; g.font='22px JetBrains Mono'; if(xb-xa>70) g.fillText(`2^${e}`,Math.max(x0,xa)+6,82); }
+  vals.forEach((v,i)=>{ const x=X(v); if(x<x0-2||x>x0+w+2) return; const sub=v<Math.pow(2,1-bias)&&v>0;
+    g.strokeStyle=sub?'#FF6B00':'#FFC700'; g.lineWidth=3; g.beginPath(); g.moveTo(x,112); g.lineTo(x,188); g.stroke(); });
+  if(typed!=null){ const x=X(typed.v), xs=X(typed.snap); g.fillStyle='#FF2E88'; g.beginPath(); g.moveTo(x,230); g.lineTo(x-12,258); g.lineTo(x+12,258); g.fill();
+    g.strokeStyle='#00C48C'; g.lineWidth=6; g.beginPath(); g.moveTo(xs,100); g.lineTo(xs,200); g.stroke(); g.fillStyle='#fff'; g.font='22px Barlow'; g.fillText(`you typed ${typed.v}, stored as ${typed.snap}`,Math.min(Math.max(x0,x-120),Wd-420),290); }
+  g.fillStyle='#C9C4F2'; g.font='20px JetBrains Mono'; g.fillText(fmtN(view.a),x0,240); g.fillText(fmtN(view.b),x0+w-120,240);
+  const total=vals.length, perBand=1<<M;
+  $('#toyread').innerHTML=`<div><small>Values this format can hold</small><b>${total}</b><small>with ${1+E+M} bits including sign: ${2*total-1}</small></div><div><small>Ticks between each power of two</small><b>${perBand}</b><small>always the same</small></div><div><small>Largest value</small><b>${fmtN(max)}</b></div><div><small>Gap near 1 / at the top</small><b>${fmtN(1/perBand)} / ${fmtN(max-vals[vals.length-2])}</b></div>`;
+  $('#mbv').textContent=M; $('#ebv').textContent=E;
+}
+const fmtN=v=>Math.abs(v)>=1e5||(v!==0&&Math.abs(v)<1e-3)?v.toExponential(2):+v.toPrecision(5)+'';
+const tc=$('#toy');
+tc.addEventListener('wheel',e=>{ e.preventDefault(); const r=tc.getBoundingClientRect(), fx=Math.max(0,Math.min(1,((e.clientX-r.left)/r.width*1600-40)/1520)), t=view.a+(view.b-view.a)*fx, k=e.deltaY>0?1.25:0.8;
+  view={a:Math.max(0,t-(t-view.a)*k),b:t+(view.b-t)*k}; drawToy(); find('toyzoom'); },{passive:false});
+tc.addEventListener('pointerdown',e=>{ drag={x:e.clientX,v:{...view}}; tc.setPointerCapture(e.pointerId); });
+tc.addEventListener('pointermove',e=>{ if(!drag) return; const r=tc.getBoundingClientRect(), dv=(e.clientX-drag.x)/r.width*(drag.v.b-drag.v.a); view={a:Math.max(0,drag.v.a-dv),b:drag.v.b-dv}; drawToy(); });
+tc.addEventListener('pointerup',()=>drag=null);
+$('#mb').oninput=e=>{ M=+e.target.value; view=null; typed=null; drawToy(); };
+$('#eb').oninput=e=>{ E=+e.target.value; view=null; typed=null; drawToy(); };
+$('#log').onclick=()=>{ logScale=!logScale; $('#log').textContent=`Log scale: ${logScale?'on':'off'}`; drawToy(); if(logScale) find('toylog'); };
+
+// ---------- 2. Real doubles, exactly ----------
+const dv=new DataView(new ArrayBuffer(8));
+const bitsOf=x=>{ dv.setFloat64(0,x); return dv.getBigUint64(0); };
+const fromBits=b=>{ dv.setBigUint64(0,b); return dv.getFloat64(0); };
+const nextUp=x=>x>=0?fromBits(bitsOf(x)+1n):fromBits(bitsOf(x)-1n);
+const nextDown=x=>x>0?fromBits(bitsOf(x)-1n):x===0?-Number.MIN_VALUE:fromBits(bitsOf(x)+1n);
+// The exact decimal value of a double: mantissa × 2^exponent, written out in full with BigInt.
+function exact(x){
+  if(!isFinite(x)) return String(x); if(x===0) return '0';
+  const b=bitsOf(Math.abs(x)), ex=Number((b>>52n)&0x7FFn), fr=b&((1n<<52n)-1n);
+  let m=ex?fr|(1n<<52n):fr, e=(ex?ex:1)-1075, s;
+  if(e>=0) s=(m<<BigInt(e)).toString();
+  else { const d=-e, num=m*(5n**BigInt(d)); let str=num.toString().padStart(d+1,'0'); s=str.slice(0,-d)+'.'+str.slice(-d); s=s.replace(/0+$/,'').replace(/\.$/,''); }
+  return (x<0?'-':'')+s;
+}
+function highlight(ex,typedStr){
+  const t=typedStr.replace(/^\+/,''); let i=0; while(i<ex.length&&i<t.length&&ex[i]===t[i]) i++;
+  if(i===ex.length&&i===t.length) return `<span class="same">${ex}</span>`;
+  return `<span class="same">${ex.slice(0,i)}</span><span class="diff">${ex.slice(i)}</span>`;
+}
+function evalInput(s){ s=s.trim(); if(/^[-+0-9.eE ()+*\/]+$/.test(s)){ try{ return Function(`"use strict";return (${s})`)(); }catch(e){} } return NaN; }
+function drawZoom(x, marks){
+  const cv=$('#zoom'), g=cv.getContext('2d'), Wd=cv.width, Hd=cv.height; g.clearRect(0,0,Wd,Hd);
+  const ticks=[x]; for(let i=0;i<6;i++){ ticks.unshift(nextDown(ticks[0])); ticks.push(nextUp(ticks[ticks.length-1])); }
+  const X=i=>60+i*(Wd-120)/12;
+  g.strokeStyle='#6b62b8'; g.lineWidth=3; g.beginPath(); g.moveTo(40,120); g.lineTo(Wd-40,120); g.stroke();
+  ticks.forEach((t,i)=>{ g.strokeStyle=i===6?'#00C48C':'#FFC700'; g.lineWidth=i===6?7:4; g.beginPath(); g.moveTo(X(i),80); g.lineTo(X(i),160); g.stroke(); });
+  g.fillStyle='#C9C4F2'; g.font='20px JetBrains Mono'; g.textAlign='center';
+  g.fillText('green: your number · yellow: the neighbouring doubles, evenly spaced '+(ticks[7]-ticks[6]).toExponential(3)+' apart',Wd/2,40);
+  (marks||[]).forEach((mk,mi)=>{ // place an exact decimal between ticks, using exact BigInt arithmetic
+    const pos=exactPos(mk.v,ticks[0],ticks[1]-ticks[0]); if(pos==null||pos<-0.5||pos>12.5) return;
+    const xx=X(pos); g.fillStyle=mk.c; g.beginPath(); g.moveTo(xx,172); g.lineTo(xx-12,200); g.lineTo(xx+12,200); g.fill(); g.fillText(mk.label,Math.min(Wd-160,Math.max(160,xx+(mi?150:-150))),226+mi*26); });
+  g.textAlign='left';
+}
+// Position of the decimal string d, measured in steps of 'step' from t0, computed exactly.
+function exactPos(d,t0,step){
+  const toFrac=s=>{ const m=s.match(/^(-?)(\d*)\.?(\d*)$/); if(!m) return null; const den=10n**BigInt(m[3].length); let num=BigInt((m[2]||'0')+m[3]); if(m[1]) num=-num; return [num,den]; };
+  const f=toFrac(d), a=toFrac(exact(t0)), s=toFrac(exact(step)); if(!f||!a||!s) return null;
+  const num=(f[0]*a[1]-a[0]*f[1])*s[1], den=f[1]*a[1]*s[0], SCALE=1000000n;
+  return Number(num*SCALE/den)/1e6;
+}
+function look(){
+  const s=$('#num').value, x=evalInput(s);
+  if(isNaN(x)){ $('#exact').textContent='Type a number, or a sum such as 0.1 + 0.2.'; return; }
+  const b=bitsOf(x).toString(2).padStart(64,'0');
+  $('#bits').innerHTML=`<span class="s">${b[0]}</span> <span class="e">${b.slice(1,12)}</span> <span class="m">${b.slice(12)}</span><div style="font-family:Barlow;font-size:12px;color:var(--soft);margin-top:4px"><span class="s">sign</span> · <span class="e">11 exponent bits: which power of two</span> · <span class="m">52 fraction bits: where within it</span></div>`;
+  const ex=exact(x), isLiteral=/^[-+]?\d*\.?\d+$/.test(s.trim());
+  $('#exact').innerHTML=`<div style="font-family:Barlow;color:#555;font-size:12px;margin-bottom:3px">The number actually stored, written out in full:</div>${isLiteral?highlight(ex,s.trim()):ex}`;
+  const marks=[]; const m=s.match(/^\s*([\d.]+)\s*\+\s*([\d.]+)\s*$/);
+  if(m){ const want=(Number(m[1])+0)+'' ; const dec=addDec(m[1],m[2]); marks.push({v:dec,c:'#FF2E88',label:`exact ${dec}`}); const near=Number(dec); if(near!==x) marks.push({v:exact(near),c:'#00C2FF',label:`${dec} as stored`}); }
+  else if(isLiteral) marks.push({v:s.trim().replace(/^\+/,''),c:'#FF2E88',label:`exactly ${s.trim()}`});
+  drawZoom(x,marks);
+  const gap=nextUp(x)-x;
+  $('#dread').innerHTML=`<div><small>JavaScript shows</small><b>${x}</b></div><div><small>Gap to the next double</small><b>${gap.toExponential(3)}</b></div><div><small>${m?`Is it equal to ${addDec(m[1],m[2])}?`:'x + 1 === x ?'}</small><b style="color:${m?(x===Number(addDec(m[1],m[2]))?'var(--green)':'var(--red)'):(x+1===x?'var(--red)':'var(--green)')}">${m?(x===Number(addDec(m[1],m[2]))?'yes':'no'):(x+1===x?'yes: adding 1 does nothing':'no')}</b></div>`;
+  if(s.replace(/\s/g,'')==='0.1') find('p1');
+  if(m&&x!==Number(addDec(m[1],m[2]))) find('p2');
+  if(Math.abs(x)>=9007199254740992) find('big');
+  if(/^\s*0\.5\s*$|^\s*0\.25\s*$|^\s*0\.75\s*$/.test(s)) find('half');
+}
+function addDec(a,b){ const d=Math.max((a.split('.')[1]||'').length,(b.split('.')[1]||'').length), sc=10n**BigInt(d);
+  const toI=s=>{ const [i,f='']=s.split('.'); return BigInt(i||'0')*sc+BigInt((f+'0'.repeat(d)).slice(0,d)||'0'); };
+  const r=toI(a)+toI(b), str=r.toString().padStart(d+1,'0'); return d?(str.slice(0,-d)+'.'+str.slice(-d)).replace(/0+$/,'').replace(/\.$/,''):str; }
+$('#presets').innerHTML=['0.1','0.1 + 0.2','0.5','1/3','9007199254740992','9007199254740993','1e16 + 1'].map(p=>`<button class="btn" data-p="${p}">${p}</button>`).join('');
+$('#presets').onclick=e=>{ const b=e.target.closest('[data-p]'); if(b){ $('#num').value=b.dataset.p; look(); } };
+$('#look').onclick=look; $('#num').addEventListener('keydown',e=>{ if(e.key==='Enter') look(); });
+// typing into section 1: snap to the toy format
+$('#tstore').addEventListener('click',()=>{ const v=parseFloat($('#tnum').value); if(isNaN(v)) return; const vals=toyValues(); let best=vals[0]; vals.forEach(t=>{ if(Math.abs(t-v)<Math.abs(best-v)) best=t; }); typed={v,snap:best}; drawToy(); });
+const FINDS=[
+ ['toyzoom','Zoom the tiny ruler in near 0 and then out near the top. Where are the ticks crowded, and where are they sparse?'],
+ ['toylog','Switch on the log scale. What happens to the spacing?'],
+ ['p1','Look up 0.1. Is the stored number exactly one tenth?'],
+ ['half','Find a decimal that is stored exactly.'],
+ ['p2','Look up 0.1 + 0.2. Where does it land compared with 0.3?'],
+ ['big','Look up 9007199254740993 (that is 2⁵³ + 1).']];
+const TELL={
+ toyzoom:'Between every pair of powers of two there are the same number of ticks, so the ticks double their spacing each time the numbers double. Near zero they are crowded; near the top a whole gap is bigger than the smallest numbers themselves. Floating point keeps the same relative precision everywhere, never the same absolute precision.',
+ toylog:'On a log scale the ticks become almost perfectly even. A float is really a number written in scientific notation, in binary: the exponent picks the band, the fraction picks the tick within it.',
+ p1:'0.1 is stored as 0.1000000000000000055511151231257827… The nearest tick to one tenth is slightly above it. One tenth in binary repeats forever, like one third in decimal, so no finite number of bits can hold it.',
+ half:'0.5, 0.25 and 0.75 are stored exactly, because they are sums of powers of two. Only fractions whose denominator is a power of two are ever exact; one tenth, one hundredth and one third never are.',
+ p2:'0.1 + 0.2 lands on a tick one step above the tick where 0.3 is stored. Each of 0.1 and 0.2 was already slightly high, and the errors added up, just enough to reach the next tick. So 0.1 + 0.2 === 0.3 is false, and nothing is broken: both answers are the nearest ticks to slightly different sums. This is why money is counted in whole pennies.',
+ big:'Above 2⁵³ the gap between neighbouring doubles is 2, so odd integers do not exist at all. 9007199254740993 is silently stored as …992, and adding 1 to it changes nothing. Large database IDs and timestamps have been corrupted this way.'};
+let seen={};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+drawToy(); look(); renderQs();
+</script>

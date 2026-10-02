@@ -1,0 +1,182 @@
+<meta charset="utf-8">
+<!-- The Transistor as a Tap — Switches All the Way Down, Chapter 13 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2;--red:#FF3B3B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1220px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--cyan)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:18px;margin:0 0 8px;font-weight:800}
+.panel{background:var(--night2);border-radius:12px;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:none;border-radius:6px;padding:8px 13px;cursor:pointer;background:var(--night3);color:#fff}
+.btn.on{background:var(--sun);color:var(--ink)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:130px 1fr 90px;gap:10px;align-items:center}
+.sl input{accent-color:var(--pink)}
+.sl b{font-family:"JetBrains Mono",monospace;font-size:20px;color:var(--sun);text-align:right}
+.two{display:grid;grid-template-columns:1.2fr 1fr;gap:12px;align-items:start}
+canvas,svg{display:block;width:100%;height:auto;border-radius:8px;background:#0F0B2E}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:8px}
+.read div{background:var(--night3);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:22px;font-family:"JetBrains Mono",monospace;color:var(--sun)}
+.read small{color:var(--soft);font-size:12px}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--night3);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.two{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>A switch with no <span>moving parts</span></h1>
+  <p>A transistor is a tap for electricity, and the handle is another voltage. No finger, no lever: one wire decides whether current flows through two others. Every gate in every computer is a few of these. Turn the handle and look inside.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="panel">
+    <h2>1 · One transistor</h2>
+    <div class="sl"><span>Gate voltage</span><input type="range" id="vg" min="0" max="500" value="0" aria-label="Gate voltage"><b id="vgv"></b></div>
+    <div class="two" style="margin-top:10px">
+      <canvas id="xsec" width="900" height="520" aria-label="Cross-section of a transistor"></canvas>
+      <div><canvas id="curve" width="700" height="520"></canvas></div>
+    </div>
+    <div class="read" id="read1"></div>
+  </section>
+  <section class="panel">
+    <h2>2 · Two transistors make a NOT gate</h2>
+    <div class="sl"><span>Input voltage</span><input type="range" id="vin" min="0" max="500" value="0" aria-label="Inverter input voltage"><b id="vinv"></b></div>
+    <div class="two" style="margin-top:10px">
+      <svg id="inv" viewBox="0 0 520 440" aria-label="CMOS inverter"></svg>
+      <canvas id="vtc" width="700" height="600"></canvas>
+    </div>
+    <div class="read" id="read2"></div>
+  </section>
+  <section class="panel">
+    <h2>3 · On the bench: one transistor, one light</h2>
+    <div class="two">
+      <svg id="bench" viewBox="0 0 520 300" aria-label="Breadboard transistor circuit"></svg>
+      <div style="font-size:14px">
+        <p style="margin-top:0">A 2N7000 transistor, an LED with a 330 Ω resistor, a push-button, and a 100 kΩ resistor from the gate to 0 V. Press the button: the gate goes to +5 V and the light comes on. Your finger is on the handle, not in the current path.</p>
+        <div class="bar"><button class="btn" id="press">Hold the button</button><button class="btn" id="pulld">100 kΩ pull-down: fitted</button></div>
+        <p id="benchsay" style="color:var(--soft)"></p>
+      </div>
+    </div>
+  </section>
+</main>
+<aside class="panel" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), VT=1.5, VDD=5;
+// A simplified transistor: nothing flows below the threshold; above it the channel conducts more
+// and more until the load (the lamp and its resistor) limits the current.
+const Imax=15; const idOf=vg=>vg<=VT?0:Math.min(Imax,6*(vg-VT)*(vg-VT));
+let vg=0, particles=[], seen={};
+function drawX(){
+  const cv=$('#xsec'), g=cv.getContext('2d'), W=cv.width, H=cv.height, I=idOf(vg), on=I>0.01, inv=Math.min(1,Math.max(0,(vg-VT)/2));
+  g.clearRect(0,0,W,H);
+  g.fillStyle='#5B3470'; g.fillRect(40,230,820,260);  // p-type silicon body
+  g.fillStyle='#fff'; g.font='24px Barlow'; g.fillText('silicon (p-type): few free electrons',60,470);
+  g.fillStyle='#1E7FB0'; g.fillRect(90,230,170,110); g.fillRect(640,230,170,110);  // n-type source and drain
+  g.fillStyle='#fff'; g.fillText('source',130,300); g.fillText('drain',690,300);
+  g.fillStyle='#C9C4F2'; g.fillRect(250,206,400,22);  // oxide
+  g.fillStyle='#14123A'; g.font='18px Barlow'; g.fillText('glass-thin insulator',360,223);
+  g.fillStyle=`rgb(${120+135*vg/5},${60+140*vg/5},${40})`; g.fillRect(260,130,380,76); // gate
+  g.fillStyle='#fff'; g.font='bold 26px Barlow'; g.fillText(`gate  ${vg.toFixed(1)} V`,360,178);
+  // electrons pulled up under the gate: first a few, then a continuous channel
+  const n=Math.floor(vg/5*70); g.fillStyle='#00C2FF';
+  for(let i=0;i<n;i++){ const x=262+((i*97)%376), y=236+((i*53)%(vg>VT?16:60)); g.beginPath(); g.arc(x,y,4,0,7); g.fill(); }
+  if(inv>0){ g.fillStyle=`rgba(0,194,255,${0.25+0.5*inv})`; g.fillRect(255,232,390,10+14*inv); g.fillStyle='#fff'; g.font='22px Barlow'; g.fillText('channel',410,275); }
+  // current flow
+  particles=particles.filter(p=>(p.x+=p.v)<640); if(on&&Math.random()<I/Imax) particles.push({x:255,v:4+I/2,y:240+Math.random()*12});
+  g.fillStyle='#FFC700'; particles.forEach(p=>{ g.beginPath(); g.arc(p.x,p.y,5,0,7); g.fill(); });
+  // wires
+  g.strokeStyle='#FFC700'; g.lineWidth=6; g.beginPath(); g.moveTo(175,230); g.lineTo(175,90); g.lineTo(60,90); g.moveTo(725,230); g.lineTo(725,90); g.lineTo(840,90); g.stroke();
+  g.fillStyle='#fff'; g.font='20px Barlow'; g.fillText('to 0 V',40,78); g.fillText('from the lamp',730,78);
+  g.strokeStyle='#FF2E88'; g.beginPath(); g.moveTo(450,130); g.lineTo(450,40); g.stroke(); g.fillText('your handle',462,52);
+  requestAnimationFrame(drawX);
+}
+function drawCurve(){
+  const cv=$('#curve'), g=cv.getContext('2d'), W=cv.width, H=cv.height, x0=70, y0=H-60, w=W-100, h=H-110;
+  g.clearRect(0,0,W,H); g.strokeStyle='#3A2E8A'; g.lineWidth=2; g.strokeRect(x0,y0-h,w,h);
+  g.fillStyle='#C9C4F2'; g.font='22px Barlow'; g.fillText('current through the lamp',x0,36);
+  for(let v=0;v<=5;v++) g.fillText(`${v} V`,x0+v/5*w-14,y0+34);
+  g.strokeStyle='#FF6B00'; g.setLineDash([8,8]); g.beginPath(); g.moveTo(x0+VT/5*w,y0-h); g.lineTo(x0+VT/5*w,y0); g.stroke(); g.setLineDash([]);
+  g.fillStyle='#FF6B00'; g.fillText('threshold',x0+VT/5*w+6,y0-h+26);
+  g.strokeStyle='#00C2FF'; g.lineWidth=5; g.beginPath(); for(let i=0;i<=200;i++){ const v=i/40; g.lineTo(x0+v/5*w,y0-idOf(v)/Imax*h); } g.stroke();
+  g.fillStyle='#FF2E88'; g.beginPath(); g.arc(x0+vg/5*w,y0-idOf(vg)/Imax*h,12,0,7); g.fill();
+}
+function read1(){ const I=idOf(vg); $('#vgv').textContent=vg.toFixed(2)+' V';
+  $('#read1').innerHTML=`<div><small>Lamp current</small><b>${I.toFixed(1)} mA</b><small>${I>=Imax?'fully on: the lamp limits it':I>0?'partly on':'off'}</small></div><div><small>Current into the gate</small><b>0 mA</b><small>it is insulated: the handle takes no effort</small></div><div><small>Lamp</small><b style="color:${I>=Imax*0.9?'var(--sun)':I>0?'var(--orange)':'var(--soft)'}">${I>=Imax*0.9?'bright':I>0?'dim':'dark'}</b></div>`;
+  if(vg>=VT-0.05&&vg<=VT+0.4) find('thr'); if(I>=Imax) find('on'); }
+$('#vg').oninput=e=>{ vg=+e.target.value/100; drawCurve(); read1(); };
+
+// ---------- 2. CMOS inverter ----------
+const vout=v=>VDD/(1+Math.exp((v-2.5)*6));                  // simplified, steep in the middle
+const iSupply=v=>Math.max(0,1-Math.abs(v-2.5)/(2.5-VT))*1.0;  // both transistors partly on only between the thresholds
+let vin=0;
+function drawInv(){
+  const vo=vout(vin), pOn=vin<VDD-VT, nOn=vin>VT, both=pOn&&nOn, c=x=>x?'#FFC700':'#6b62b8';
+  let h=`<text x="260" y="26" text-anchor="middle" font-size="16" fill="#fff" font-weight="700">+5 V</text><line x1="160" y1="36" x2="360" y2="36" stroke="#FF3B3B" stroke-width="6"/>`;
+  h+=`<line x1="260" y1="36" x2="260" y2="80" stroke="${c(pOn)}" stroke-width="6"/>`;
+  h+=`<rect x="220" y="80" width="80" height="70" rx="8" fill="${pOn?'#FFF3CC':'#2A2066'}" stroke="${c(pOn)}" stroke-width="4"/><text x="260" y="122" text-anchor="middle" font-size="18" font-weight="800" fill="${pOn?'#14123A':'#fff'}">P</text><text x="320" y="112" font-size="13" fill="#C9C4F2">on when input is low</text>`;
+  h+=`<line x1="260" y1="150" x2="260" y2="290" stroke="${vo>2.5?'#FFC700':'#6b62b8'}" stroke-width="6"/>`;
+  h+=`<rect x="220" y="290" width="80" height="70" rx="8" fill="${nOn?'#FFF3CC':'#2A2066'}" stroke="${c(nOn)}" stroke-width="4"/><text x="260" y="332" text-anchor="middle" font-size="18" font-weight="800" fill="${nOn?'#14123A':'#fff'}">N</text><text x="320" y="322" font-size="13" fill="#C9C4F2">on when input is high</text>`;
+  h+=`<line x1="260" y1="360" x2="260" y2="404" stroke="${c(nOn)}" stroke-width="6"/><line x1="160" y1="404" x2="360" y2="404" stroke="#3A6BFF" stroke-width="6"/><text x="260" y="430" text-anchor="middle" font-size="16" fill="#fff" font-weight="700">0 V</text>`;
+  h+=`<line x1="60" y1="115" x2="220" y2="115" stroke="#FF2E88" stroke-width="4"/><line x1="60" y1="325" x2="220" y2="325" stroke="#FF2E88" stroke-width="4"/><line x1="60" y1="115" x2="60" y2="325" stroke="#FF2E88" stroke-width="4"/><circle cx="60" cy="220" r="10" fill="#FF2E88"/><text x="30" y="205" font-size="15" fill="#FF2E88" font-weight="700">in ${vin.toFixed(1)} V</text>`;
+  h+=`<line x1="260" y1="220" x2="440" y2="220" stroke="${vo>2.5?'#FFC700':'#6b62b8'}" stroke-width="6"/><circle cx="460" cy="220" r="22" fill="${vo>2.5?'#FFC700':'#2A2066'}" stroke="#fff" stroke-width="3"/><text x="460" y="266" text-anchor="middle" font-size="15" fill="#fff" font-weight="700">out ${vo.toFixed(2)} V</text>`;
+  if(both) h+=`<text x="330" y="262" text-anchor="middle" font-size="14" fill="#FF3B3B" font-weight="800">both on: current flows straight through!</text>`;
+  $('#inv').innerHTML=h;
+  const cv=$('#vtc'), g=cv.getContext('2d'), W=cv.width, H=cv.height, x0=70, y0=H-60, w=W-100, hh=(H-140)/2;
+  g.clearRect(0,0,W,H); g.fillStyle='#C9C4F2'; g.font='22px Barlow';
+  g.fillText('output voltage',x0,30); g.strokeStyle='#3A2E8A'; g.lineWidth=2; g.strokeRect(x0,44,w,hh);
+  g.strokeStyle='#00C2FF'; g.lineWidth=5; g.beginPath(); for(let i=0;i<=200;i++){ const v=i/40; g.lineTo(x0+v/5*w,44+hh-vout(v)/5*hh); } g.stroke();
+  g.fillStyle='#FF2E88'; g.beginPath(); g.arc(x0+vin/5*w,44+hh-vo/5*hh,11,0,7); g.fill();
+  const y2=44+hh+50; g.fillStyle='#C9C4F2'; g.fillText('current from the supply',x0,y2-8); g.strokeRect(x0,y2,w,hh-10);
+  g.strokeStyle='#FF3B3B'; g.lineWidth=5; g.beginPath(); for(let i=0;i<=200;i++){ const v=i/40; g.lineTo(x0+v/5*w,y2+hh-10-iSupply(v)*(hh-20)); } g.stroke();
+  g.fillStyle='#FF2E88'; g.beginPath(); g.arc(x0+vin/5*w,y2+hh-10-iSupply(vin)*(hh-20),11,0,7); g.fill();
+  for(let v=0;v<=5;v++) g.fillText(`${v}`,x0+v/5*w-6,H-28); g.fillText('input voltage →',x0+w-170,H-6);
+  $('#vinv').textContent=vin.toFixed(2)+' V';
+  $('#read2').innerHTML=`<div><small>Output</small><b>${vo.toFixed(2)} V</b><small>${vo>4.5?'a clean 1':vo<0.5?'a clean 0':'in between'}</small></div><div><small>Input 2.0 V (ragged) gives</small><b>${vout(2).toFixed(2)} V</b><small>restored towards a clean 1</small></div><div><small>Current wasted right now</small><b style="color:${iSupply(vin)>0.05?'var(--red)':'var(--green)'}">${iSupply(vin)>0.05?'yes':'none'}</b><small>only while switching</small></div>`;
+  if(vin>=1.9&&vin<=2.2) find('restore'); if(both&&Math.abs(vin-2.5)<0.4) find('spike');
+}
+$('#vin').oninput=e=>{ vin=+e.target.value/100; drawInv(); };
+
+// ---------- 3. The bench ----------
+let pressed=false, pulldown=true, flick=0;
+function drawBench(){
+  const floating=!pulldown&&!pressed, gateHigh=pressed||(floating&&Math.random()<0.45), on=gateHigh;
+  let h=`<rect x="10" y="10" width="500" height="280" rx="10" fill="#F4F1FF"/><rect x="20" y="20" width="480" height="12" rx="3" fill="#FF3B3B" opacity=".8"/><text x="28" y="30" font-size="10" fill="#fff" font-weight="700">+5 V</text><rect x="20" y="268" width="480" height="12" rx="3" fill="#3A6BFF" opacity=".8"/><text x="28" y="278" font-size="10" fill="#fff" font-weight="700">0 V</text>`;
+  h+=`<rect x="70" y="110" width="44" height="44" rx="6" fill="#333"/><circle cx="92" cy="132" r="${pressed?12:15}" fill="${pressed?'#FF2E88':'#aaa'}"/><text x="92" y="176" text-anchor="middle" font-size="11" fill="#14123A">button</text>`;
+  h+=`<line x1="92" y1="32" x2="92" y2="110" stroke="#8A83B8" stroke-width="3"/><line x1="114" y1="132" x2="230" y2="132" stroke="${gateHigh?'#FFC700':'#8A83B8'}" stroke-width="3"/>`;
+  if(pulldown) h+=`<rect x="186" y="160" width="10" height="50" fill="#D2A24C"/><line x1="191" y1="132" x2="191" y2="160" stroke="#8A83B8" stroke-width="3"/><line x1="191" y1="210" x2="191" y2="268" stroke="#8A83B8" stroke-width="3"/><text x="200" y="190" font-size="10" fill="#14123A">100 kΩ</text>`;
+  h+=`<path d="M230,110 h40 a10,10 0 0 1 10,10 v24 a10,10 0 0 1 -10,10 h-40 z" fill="#222"/><text x="255" y="176" text-anchor="middle" font-size="11" fill="#14123A">2N7000</text><text x="222" y="104" font-size="10" fill="#14123A">gate</text>`;
+  h+=`<line x1="270" y1="154" x2="270" y2="268" stroke="${on?'#FFC700':'#8A83B8'}" stroke-width="3"/><line x1="270" y1="110" x2="270" y2="80" stroke="${on?'#FFC700':'#8A83B8'}" stroke-width="3"/><line x1="270" y1="80" x2="380" y2="80" stroke="${on?'#FFC700':'#8A83B8'}" stroke-width="3"/>`;
+  h+=`<circle cx="400" cy="80" r="18" fill="${on?'#FF2E88':'#5A2340'}" ${on?'style="filter:drop-shadow(0 0 10px #FF2E88)"':''}/><rect x="420" y="75" width="40" height="10" fill="#D2A24C"/><line x1="460" y1="80" x2="480" y2="80" stroke="#8A83B8" stroke-width="3"/><line x1="480" y1="80" x2="480" y2="32" stroke="#8A83B8" stroke-width="3"/><text x="440" y="70" font-size="10" fill="#14123A">330 Ω</text>`;
+  $('#bench').innerHTML=h;
+  $('#benchsay').textContent=floating?'No pull-down and no button: the gate is connected to nothing. It picks up stray charge from the air and from your hand, and the light flickers on its own.':pressed?'Gate at +5 V: the channel forms and the light is on.':'Gate held at 0 V by the resistor: off, and it stays off.';
+  if(floating) find('float');
+}
+$('#press').addEventListener('pointerdown',()=>{ pressed=true; drawBench(); find('bench'); });
+['pointerup','pointerleave'].forEach(ev=>$('#press').addEventListener(ev,()=>{ pressed=false; drawBench(); }));
+$('#pulld').onclick=()=>{ pulldown=!pulldown; $('#pulld').textContent=`100 kΩ pull-down: ${pulldown?'fitted':'removed'}`; $('#pulld').classList.toggle('on',!pulldown); drawBench(); };
+setInterval(()=>{ if(!pulldown&&!pressed) drawBench(); },180);
+const FINDS=[
+ ['thr','Raise the gate voltage slowly. At what voltage does anything start to flow?'],
+ ['on','Keep going until the lamp is fully on. Why does the current stop rising?'],
+ ['restore','Set the NOT gate’s input to a sloppy 2 volts. What comes out?'],
+ ['spike','Find the input voltage where both transistors are on at once.'],
+ ['bench','On the bench, hold the button.'],
+ ['float','Remove the pull-down resistor and leave the button alone.']];
+const TELL={
+ thr:'Nothing flows until the gate reaches the threshold, about 1.5 volts here. Below it, the gate’s charge only pushes holes away; at the threshold, enough electrons are pulled up under the insulator to join source to drain with a thin channel. The tap has a definite “closed”.',
+ on:'Once the channel is wide open, the transistor is no longer the limit; the lamp and its resistor are. That is the transistor used as a switch: either off, or on as hard as the rest of the circuit allows. Computers only ever use these two ends.',
+ restore:'A ragged 2 V input comes out as nearly 5 V: the gate cleaned it up. Its curve is steep in the middle and flat at both ends, so small errors on the input shrink on the output. This is the restoring stage from the noise chapter, built from two transistors.',
+ spike:'In the middle, both transistors are partly on and current runs straight from +5 V to ground. It only happens during the instant of switching. A billion gates switching three billion times a second is why a processor gets hot, and why the clock speed stopped climbing around 2005.',
+ bench:'Your finger sets the gate voltage; the gate draws almost no current, so a tiny signal controls the lamp. Replace your finger with the output of another transistor and you have logic.',
+ float:'A gate connected to nothing is not 0. It floats, and the insulated gate holds whatever stray charge it collects. This is why every unused input on a real board is tied to 0 V or +5 V, and why the bench card for every chip in the Workbench repeats it.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join('')+'<p style="font-size:12px;color:var(--soft)">The curves use a simplified model of a real transistor; the shapes are right, the exact numbers vary from part to part.</p>'; }
+drawCurve(); read1(); drawInv(); drawBench(); renderQs(); requestAnimationFrame(drawX);
+</script>

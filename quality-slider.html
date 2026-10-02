@@ -1,0 +1,156 @@
+<meta charset="utf-8">
+<!-- E10 · The Quality Slider — Switches All the Way Down, Chapter 10 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1240px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--sun)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:17px;margin:0 0 8px;font-weight:800}
+.panel{background:var(--night2);border-radius:12px;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:none;border-radius:6px;padding:8px 13px;cursor:pointer;background:var(--night3);color:#fff}
+.btn.pink{background:var(--pink)}.btn.cyan{background:var(--cyan);color:var(--ink)}.btn.sun{background:var(--sun);color:var(--ink)}.btn.on{outline:3px solid var(--sun)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.q{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center}
+.q input{accent-color:var(--pink);height:30px}
+.q b{font-family:"JetBrains Mono",monospace;font-size:34px;color:var(--pink);min-width:70px;text-align:right}
+.imgs{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.imgbox{position:relative}
+.imgbox canvas.main{width:100%;height:auto;display:block;border-radius:8px;cursor:crosshair}
+.lens{width:110px;height:110px;flex:none;border:4px solid var(--sun);border-radius:8px;image-rendering:pixelated;background:#000;pointer-events:none}
+.read{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.read div:last-child{grid-column:1/-1}
+.read div{background:var(--night3);border-radius:8px;padding:6px 8px}
+.read b{display:block;font-size:20px;font-family:"JetBrains Mono",monospace;color:var(--sun)}
+.read small{color:var(--soft);font-size:11px}
+canvas#curve{width:100%;height:auto;border-radius:8px;background:#0F0B2E}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.find{background:var(--night3);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.find.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.imgs{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>How much can you <span>throw away</span>?</h1>
+  <p>JPEG shrinks pictures by discarding detail your eye is bad at noticing. Slide the quality and watch two very different pictures, compressed for real by your browser’s own JPEG encoder. Point at either picture to magnify it four times.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="panel q"><strong>Quality</strong><input type="range" id="q" min="1" max="100" value="100" aria-label="JPEG quality"><b id="qv">100</b></section>
+  <div class="bar">
+    <button class="btn" id="diff">Show what was thrown away</button>
+    <button class="btn pink" id="gen">Edit and re-save 30 times</button>
+    <button class="btn" id="orig">Back to the original</button>
+    <span id="gensay" style="color:var(--soft)"></span>
+  </div>
+  <div class="imgs">
+    <section class="panel"><h2>A photograph</h2><div class="imgbox"><canvas class="main" id="c0" width="480" height="320"></canvas></div><div style="display:flex;gap:8px;align-items:stretch;margin-top:8px"><canvas class="lens" id="l0" width="42" height="42" aria-label="4× magnifier"></canvas><div class="read" id="r0" style="flex:1;margin-top:0;grid-template-columns:1fr 1fr"></div></div></section>
+    <section class="panel"><h2>A screenshot with text</h2><div class="imgbox"><canvas class="main" id="c1" width="480" height="320"></canvas></div><div style="display:flex;gap:8px;align-items:stretch;margin-top:8px"><canvas class="lens" id="l1" width="42" height="42" aria-label="4× magnifier"></canvas><div class="read" id="r1" style="flex:1;margin-top:0;grid-template-columns:1fr 1fr"></div></div></section>
+  </div>
+  <section class="panel"><h2>File size at every quality</h2><canvas id="curve" width="1400" height="420"></canvas>
+    <p style="font-size:13px;color:var(--soft);margin:6px 0 0">Measured, not drawn by hand: each point is a real encode. Pink: the photograph. Blue: the screenshot. Dashed: the screenshot saved losslessly as PNG. The size scale is logarithmic: each step up is a multiplication.</p></section>
+</main>
+<aside class="panel" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="fs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), W=480, H=320;
+// ---------- Two source images, generated so the page needs no files ----------
+let seed=7; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+function photo(){
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
+  let gr=g.createLinearGradient(0,0,0,H*0.6); gr.addColorStop(0,'#FF7A59'); gr.addColorStop(0.5,'#FFB36B'); gr.addColorStop(1,'#FFE3A3'); g.fillStyle=gr; g.fillRect(0,0,W,H);
+  g.fillStyle='#FFF4D6'; g.beginPath(); g.arc(340,120,34,0,7); g.fill();
+  const ridge=(base,amp,col,rough)=>{ g.fillStyle=col; g.beginPath(); g.moveTo(0,H); let y=base;
+    for(let x=0;x<=W;x+=4){ y+= (rnd()-0.5)*rough; y=Math.max(base-amp,Math.min(base+amp,y)); g.lineTo(x,y); } g.lineTo(W,H); g.fill(); };
+  ridge(170,40,'#8C4E7A',14); ridge(200,30,'#5B3470',10); ridge(230,20,'#2E2352',8);
+  gr=g.createLinearGradient(0,230,0,H); gr.addColorStop(0,'#FF9E7A'); gr.addColorStop(1,'#3A2A6E'); g.fillStyle=gr; g.fillRect(0,240,W,H-240);
+  for(let i=0;i<50;i++){ const x=rnd()*W, h=20+rnd()*40; g.fillStyle=`hsl(${150+rnd()*40},60%,${14+rnd()*12}%)`; g.beginPath(); g.moveTo(x,250); g.lineTo(x-8,250); g.lineTo(x-3,250-h); g.fill(); }
+  for(let i=0;i<260;i++){ g.fillStyle=`hsla(${20+rnd()*30},100%,${60+rnd()*30}%,.5)`; g.fillRect(rnd()*W,244+rnd()*70,6+rnd()*18,1.5); }
+  // sensor grain: every real photo has it, and it is expensive to keep
+  const im=g.getImageData(0,0,W,H), d=im.data; for(let i=0;i<d.length;i+=4){ const n=(rnd()-0.5)*14; d[i]+=n; d[i+1]+=n; d[i+2]+=n; } g.putImageData(im,0,0);
+  return c;
+}
+function screenshot(){
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
+  g.fillStyle='#FFFFFF'; g.fillRect(0,0,W,H); g.fillStyle='#14123A'; g.fillRect(0,0,W,34);
+  g.fillStyle='#fff'; g.font='bold 16px Arial'; g.fillText('Quarterly results',14,23);
+  g.fillStyle='#14123A'; g.font='13px Arial';
+  ['Revenue rose in every region except','the north, where the new store opened late.','Figures in thousands.'].forEach((t,i)=>g.fillText(t,14,60+i*18));
+  const vals=[62,88,45,97,74], cols=['#FF2E88','#00C2FF','#FFC700','#00C48C','#FF6B00'];
+  g.strokeStyle='#14123A'; g.lineWidth=1; g.beginPath(); g.moveTo(40,300); g.lineTo(460,300); g.moveTo(40,300); g.lineTo(40,130); g.stroke();
+  vals.forEach((v,i)=>{ g.fillStyle=cols[i]; g.fillRect(60+i*80,300-v*1.6,50,v*1.6); g.fillStyle='#14123A'; g.font='12px Arial'; g.fillText(['N','S','E','W','C'][i],80+i*80,314); g.fillText(v,78+i*80,294-v*1.6); });
+  g.font='11px Arial'; for(let y=0;y<=100;y+=25){ g.fillText(y,14,304-y*1.6); }
+  return c;
+}
+const SRC=[photo(),screenshot()];
+let cur=SRC.map(s=>s), showDiff=false, gens=0, pngSize=[0,0], sizes={0:{},1:{}}, seen={};
+const blobOf=(canvas,type,q)=>new Promise(r=>canvas.toBlob(b=>r(b),type,q));
+const imgOf=blob=>new Promise(r=>{ const i=new Image(); i.onload=()=>r(i); i.src=URL.createObjectURL(blob); });
+let lastRender=0;
+async function render(){
+  const token=++lastRender, q=+$('#q').value;
+  for(let k=0;k<2;k++){
+    const blob=await blobOf(cur[k],'image/jpeg',q/100); if(token!==lastRender) return;
+    const im=await imgOf(blob), cv=$('#c'+k), g=cv.getContext('2d');
+    g.drawImage(im,0,0);
+    if(showDiff){ const a=g.getImageData(0,0,W,H), o=SRC[k].getContext('2d').getImageData(0,0,W,H);
+      for(let i=0;i<a.data.length;i+=4){ for(let j=0;j<3;j++) a.data[i+j]=Math.min(255,Math.abs(a.data[i+j]-o.data[i+j])*6); } g.putImageData(a,0,0); }
+    const raw=W*H*3;
+    $('#r'+k).innerHTML=`<div><small>JPEG size</small><b>${(blob.size/1024).toFixed(1)} KB</b></div><div><small>vs. uncompressed ${(raw/1024).toFixed(0)} KB</small><b>${(raw/blob.size).toFixed(0)}×</b></div><div><small>Lossless PNG</small><b>${(pngSize[k]/1024).toFixed(1)} KB</b></div>`;
+    sizes[k].now=blob.size; lens(k);
+  }
+  checkFinds(q);
+}
+let lensAt=[{x:200,y:60},{x:60,y:52}];
+function lens(k){ const l=$('#l'+k).getContext('2d'); l.imageSmoothingEnabled=false; const p=lensAt[k]; l.drawImage($('#c'+k),p.x-21,p.y-21,42,42,0,0,42,42); }
+[0,1].forEach(k=>$('#c'+k).addEventListener('pointermove',e=>{ const r=e.target.getBoundingClientRect(); lensAt[k]={x:Math.round((e.clientX-r.left)/r.width*W),y:Math.round((e.clientY-r.top)/r.height*H)}; lens(k); }));
+async function measure(){
+  for(let k=0;k<2;k++){ pngSize[k]=(await blobOf(SRC[k],'image/png')).size; for(let q=2;q<=100;q+=4) sizes[k][q]=(await blobOf(SRC[k],'image/jpeg',q/100)).size; sizes[k][100]=(await blobOf(SRC[k],'image/jpeg',1)).size; }
+  drawCurve(); render();
+}
+function drawCurve(){
+  const cv=$('#curve'), g=cv.getContext('2d'), Wc=cv.width, Hc=cv.height, x0=90, y0=Hc-50, w=Wc-120, h=Hc-80;
+  // Logarithmic size axis, so small files and huge ones are both readable.
+  const lo=Math.log(1024), hi=Math.log(512*1024), Y=v=>y0-(Math.log(Math.max(v,1024))-lo)/(hi-lo)*h;
+  g.clearRect(0,0,Wc,Hc); g.strokeStyle='#3A2E8A'; g.lineWidth=2; g.strokeRect(x0,y0-h,w,h);
+  g.fillStyle='#C9C4F2'; g.font='24px Barlow';
+  for(let q=0;q<=100;q+=25) g.fillText(q,x0+q/100*w-10,y0+34);
+  [1,2,5,10,20,50,100,200,500].forEach(kb=>{ const y=Y(kb*1024); g.fillText(`${kb} KB`,6,y+8); g.strokeStyle='#241B5C'; g.lineWidth=1; g.beginPath(); g.moveTo(x0,y); g.lineTo(x0+w,y); g.stroke(); });
+  [[0,'#FF2E88'],[1,'#00C2FF']].forEach(([k,c])=>{ g.strokeStyle=c; g.lineWidth=5; g.beginPath();
+    Object.entries(sizes[k]).filter(([q])=>q!=='now').sort((a,b)=>a[0]-b[0]).forEach(([q,v])=>g.lineTo(x0+q/100*w,Y(v))); g.stroke(); });
+  g.strokeStyle='#00C2FF'; g.setLineDash([10,10]); g.lineWidth=3; g.beginPath(); g.moveTo(x0,Y(pngSize[1])); g.lineTo(x0+w,Y(pngSize[1])); g.stroke(); g.setLineDash([]);
+  const q=+$('#q').value; g.strokeStyle='#FFC700'; g.lineWidth=3; g.beginPath(); g.moveTo(x0+q/100*w,y0-h); g.lineTo(x0+q/100*w,y0); g.stroke();
+}
+const FINDS=[
+ ['q75','Slide from 100 to 75. How much smaller is the photograph? Can you see any difference?'],
+ ['q20','Keep going below 30. Where do the first artefacts appear, and in which picture?'],
+ ['png','Raise the quality until the screenshot’s text looks as crisp as the original. Compare that file with the lossless PNG.'],
+ ['diff','Turn on “show what was thrown away”. Where did the losses go?'],
+ ['gen','Edit and re-save the pictures 30 times at quality 75.']];
+const TELL={
+ q75:'Most of the saving comes before you can see any loss: the photograph shrinks to a fraction of its size and still looks the same. Near 100, JPEG is spending bytes on detail below what an eye can register.',
+ q20:'Artefacts come first on the screenshot, around every letter and bar edge, and later on the photograph, as blocky patches in the smooth sky. JPEG works in 8 × 8 squares and keeps the gentle changes; sharp edges are made of exactly the fast changes it throws out.',
+ png:'At quality 75 the screenshot’s JPEG is smaller than the PNG, but the text is smudged. By the time the JPEG looks nearly as crisp, it is bigger than the PNG, which is perfect. Flat colours and sharp edges are what PNG compresses best and JPEG worst. The right format depends on what is in the picture, not on taste.',
+ diff:'The difference image is brightest in the grass, the grain and around every edge: the busy places where the eye is least able to notice an error. Nothing is thrown away evenly. That is perceptual coding: spend the bytes where people look, save them where they don’t.',
+ gen:'Each round shifts the image by a pixel, as an edit would, then saves again. The rounding is redone on already-damaged data, so the losses stack up. This is generation loss, and it is why an image forwarded and re-saved many times turns to mush.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderFinds(); }
+function renderFinds(){ $('#fs').innerHTML=FINDS.map(([id,t])=>`<div class="find ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+function checkFinds(q){ if(q<=78&&q>=70&&!gens) find('q75'); if(q<30&&!gens) find('q20'); if(q>=92&&!gens&&seen.q20&&sizes[1].now>pngSize[1]) find('png'); drawCurve(); }
+$('#q').addEventListener('input',()=>{ $('#qv').textContent=$('#q').value; render(); });
+$('#diff').onclick=()=>{ showDiff=!showDiff; $('#diff').classList.toggle('on',showDiff); $('#diff').textContent=showDiff?'Show the picture':'Show what was thrown away'; render(); if(showDiff) find('diff'); };
+// Generation loss: shift one pixel (an "edit"), save at the current quality, reopen, repeat.
+$('#gen').onclick=async()=>{
+  const q=+$('#q').value/100;
+  for(let i=0;i<30;i++){
+    for(let k=0;k<2;k++){ const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
+      g.drawImage(cur[k],0,0); g.drawImage(cur[k],(i%2)?1:-1,(i%3===0)?1:0); /* fill the edge, then shift: an edit with no black border */ const im=await imgOf(await blobOf(c,'image/jpeg',q)); g.drawImage(im,0,0); cur[k]=c; }
+    gens++; $('#gensay').textContent=`${gens} saves`; await render();
+  }
+  if(q>=0.7&&q<=0.8) find('gen');
+};
+$('#orig').onclick=()=>{ cur=SRC.map(s=>s); gens=0; $('#gensay').textContent=''; render(); };
+renderFinds(); measure();
+</script>

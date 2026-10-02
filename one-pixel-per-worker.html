@@ -1,0 +1,129 @@
+<meta charset="utf-8">
+<!-- One Pixel Per Worker — Switches All the Way Down, Chapter 45 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--violet)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.violet{background:var(--violet);color:#fff;border-color:var(--violet)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+canvas{display:block;width:100%;height:auto;background:#0F1020;border-radius:10px;image-rendering:pixelated}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:22px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.sl{display:grid;grid-template-columns:130px 1fr 60px;gap:10px;align-items:center}
+.sl input{accent-color:var(--pink)}
+.note{background:#EEE8FB;border:1px solid #D3C4F3;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.two{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>One pixel per <span>worker</span></h1>
+  <p>Colouring a triangle means deciding a colour for every pixel inside it — millions of tiny, identical, independent jobs. A CPU visits them one after another. A GPU throws thousands of simple workers at them at once. Race the two, then find where the GPU’s trick breaks down.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar">
+      <button class="btn violet" id="race">Race CPU vs GPU</button>
+      <button class="btn" id="branch">Shader branch: off</button>
+      <span style="flex:1"></span>
+      <div class="sl" style="min-width:260px"><span>GPU workers</span><input type="range" id="workers" min="1" max="256" value="64"><b id="wv">64</b></div>
+    </div>
+  </section>
+  <div class="two">
+    <section class="card"><h2>CPU — one worker, pixel by pixel</h2><canvas id="cpu" width="120" height="90"></canvas><div id="cpuread" style="margin-top:6px"></div></section>
+    <section class="card"><h2>GPU — many workers at once</h2><canvas id="gpu" width="120" height="90"></canvas><div id="gpuread" style="margin-top:6px"></div></section>
+  </div>
+  <div class="read" id="read"></div>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), W=120, H=90;
+// A triangle. Each pixel: is it inside? if so, shade it. With a branch, half the pixels take a
+// slow path — and on a GPU, workers move in lockstep, so a whole group waits for its slowest member.
+const TRI=[[60,10],[110,80],[15,78]];
+function edge(a,b,p){ return (p[0]-a[0])*(b[1]-a[1])-(p[1]-a[1])*(b[0]-a[0]); }
+function inside(x,y){ const p=[x+.5,y+.5]; const d0=edge(TRI[0],TRI[1],p),d1=edge(TRI[1],TRI[2],p),d2=edge(TRI[2],TRI[0],p); return (d0<=0&&d1<=0&&d2<=0)||(d0>=0&&d1>=0&&d2>=0); }
+let branch=false, workers=64, busy=false, seen={};
+function shade(x,y){ // colour for a pixel, cheap unless it takes the slow branch
+  const t=(x/W), base=[124+100*t,79+40*(y/H),224-80*t];
+  if(branch && (x+y)%2===0){ let v=0; for(let k=0;k<40;k++) v+=Math.sin(k*x)*Math.cos(k*y); return [255,180+((v|0)%40),60]; } // slow, different colour
+  return base;
+}
+function drawFull(cv){ const g=cv.getContext('2d'), im=g.createImageData(W,H); for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=(y*W+x)*4; if(inside(x,y)){ const c=shade(x,y); im.data.set([c[0],c[1],c[2],255],i);} else im.data.set([15,16,32,255],i);} g.putImageData(im,0,0); }
+async function race(){
+  if(busy) return; busy=true;
+  const cpu=$('#cpu'), gpu=$('#gpu'), cg=cpu.getContext('2d'), gg=gpu.getContext('2d');
+  const cim=cg.createImageData(W,H), gim=gg.createImageData(W,H);
+  for(let i=0;i<W*H;i++){ cim.data.set([15,16,32,255],i*4); gim.data.set([15,16,32,255],i*4); }
+  cg.putImageData(cim,0,0); gg.putImageData(gim,0,0);
+  // cost model: a normal pixel = 1 unit, a slow-branch pixel = 8 units.
+  const cost=(x,y)=>branch&&(x+y)%2===0?8:1;
+  // CPU: visits pixels in order, one at a time. Total time = sum of costs of inside pixels.
+  let cpuTime=0, cpuPix=0;
+  // GPU: workers process groups of pixels in lockstep. A group finishes at its MAX cost, not sum.
+  // Group size fixed at 32 (a "warp"); number of parallel groups = workers/32.
+  const GROUP=32, activeLanes=Math.min(GROUP,workers), parallel=Math.max(1,Math.floor(workers/GROUP));
+  const pixels=[]; for(let y=0;y<H;y++)for(let x=0;x<W;x++) if(inside(x,y)) pixels.push([x,y]);
+  cpuPix=pixels.length; pixels.forEach(([x,y])=>cpuTime+=cost(x,y));
+  // GPU time: chunk pixels into groups of 32; each group costs its max; groups run 'parallel' at a time.
+  // Each 32-pixel group runs on up to `activeLanes` lanes in lockstep. Its cost = max pixel cost
+  // in the group, times how many passes are needed to cover 32 pixels with activeLanes lanes.
+  let gpuTime=0, groupCost=[]; const passes=Math.ceil(GROUP/activeLanes);
+  for(let i=0;i<pixels.length;i+=GROUP){ let m=0; for(let j=i;j<Math.min(i+GROUP,pixels.length);j++) m=Math.max(m,cost(pixels[j][0],pixels[j][1])); groupCost.push(m*passes); }
+  const groupsAtOnce=Math.max(1,Math.floor(workers/GROUP));
+  for(let i=0;i<groupCost.length;i+=groupsAtOnce){ let waveMax=0; for(let j=i;j<Math.min(i+groupsAtOnce,groupCost.length);j++) waveMax=Math.max(waveMax,groupCost[j]); gpuTime+=waveMax; }
+  // animate both filling, scaled so the faster one finishes quickly
+  const maxT=Math.max(cpuTime,gpuTime), frames=40;
+  for(let f=1;f<=frames;f++){
+    const cpuDone=Math.min(1,f/frames*maxT/cpuTime), gpuDone=Math.min(1,f/frames*maxT/gpuTime);
+    fill(cg,cim,pixels,cpuDone); fill(gg,gim,pixels,gpuDone,parallel*GROUP);
+    $('#cpuread').innerHTML=meter('CPU',cpuDone,cpuTime,maxT);
+    $('#gpuread').innerHTML=meter('GPU',gpuDone,gpuTime,maxT);
+    await new Promise(r=>setTimeout(r,26));
+  }
+  drawFull(cpu); drawFull(gpu);
+  const speedup=(cpuTime/gpuTime).toFixed(1);
+  $('#read').innerHTML=`<div><small>Pixels to colour</small><b>${cpuPix.toLocaleString()}</b></div>`+
+    `<div><small>CPU time (work units)</small><b>${cpuTime.toLocaleString()}</b></div>`+
+    `<div><small>GPU time (work units)</small><b>${gpuTime.toLocaleString()}</b></div>`+
+    `<div><small>GPU speed-up</small><b style="color:var(--violet)">${speedup}×</b></div>`;
+  busy=false;
+  if(!branch&&+speedup>10) find('fast');
+  if(branch) find('branch');
+  if(workers<=8) find('fewworkers');
+}
+function fill(g,im,pixels,frac,perWave){
+  const n=Math.floor(pixels.length*frac);
+  for(let i=0;i<n;i++){ const [x,y]=pixels[i], c=shade(x,y); im.data.set([c[0],c[1],c[2],255],(y*W+x)*4); }
+  g.putImageData(im,0,0);
+}
+function meter(name,done,t,maxT){ return `<div style="font-size:13px;color:var(--soft)">${Math.round(done*100)}% done${done>=1?` — finished in ${Math.round(t/maxT*100)}% of the slow one’s time`:''}</div>`; }
+$('#race').onclick=race;
+$('#branch').onclick=()=>{ branch=!branch; $('#branch').textContent=`Shader branch: ${branch?'on':'off'}`; $('#branch').classList.toggle('on',branch); drawFull($('#cpu')); drawFull($('#gpu')); };
+$('#workers').oninput=e=>{ workers=+e.target.value; $('#wv').textContent=workers; };
+const FINDS=[
+ ['fast','Race with the branch off. How much faster is the GPU?'],
+ ['branch','Switch the shader branch on and race again. What happens to the GPU’s lead?'],
+ ['fewworkers','Drop the GPU to fewer than 32 workers and race.']];
+const TELL={
+ fast:'On a task that is millions of identical, independent little jobs, the GPU wins enormously: while the CPU walks pixel by pixel, thousands of GPU workers each colour their own pixel at the same moment. This is the one thing a GPU is built to do, and graphics, and later neural networks, are exactly this shape.',
+ branch:'The GPU’s lead collapses. Its workers do not run freely — they move in lockstep, a whole group of 32 stepping through the same instruction together. When a branch sends some workers down a slow path, the fast ones cannot move on; they idle and wait for the slow ones. A group is only as quick as its slowest member. This is why GPU code avoids “if” statements, and why a GPU is a specialist, not a faster CPU.',
+ fewworkers:'With few workers the GPU loses its advantage and can even fall behind: its individual workers are simpler and slower than a CPU core, and the whole point was to have thousands of them. Parallelism only pays when the work is wide enough to keep them all busy. A GPU with nothing to parallelise is just a slow CPU.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join('')+'<p style="font-size:12px;color:var(--soft)">“Work units” are a simple model: a normal pixel costs 1, a slow-branch pixel 8. Real GPUs are far more intricate, but the lockstep effect is real.</p>'; }
+drawFull($('#cpu')); drawFull($('#gpu')); renderQs();
+</script>

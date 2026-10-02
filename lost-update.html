@@ -1,0 +1,142 @@
+<meta charset="utf-8">
+<!-- The Lost Update — Switches All the Way Down, Chapter 22 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2;--red:#FF3B3B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1160px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--red)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.panel{background:var(--night2);border-radius:12px;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:none;border-radius:6px;padding:8px 13px;cursor:pointer;background:var(--night3);color:#fff}
+.btn.on{background:var(--sun);color:var(--ink)}.btn.pink{background:var(--pink)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.threads{display:grid;grid-template-columns:1fr 120px 1fr;gap:12px;align-items:start}
+.thread{background:var(--night3);border-radius:10px;padding:10px}
+.thread.A{border-top:5px solid var(--cyan)}.thread.B{border-top:5px solid var(--pink)}
+.instr{border-radius:7px;padding:8px 10px;margin:5px 0;font-family:"JetBrains Mono",monospace;font-size:15px;display:flex;justify-content:space-between;align-items:center;background:#241B5C}
+.instr.done{opacity:.4}.instr.cur{outline:3px solid var(--sun)}
+.instr .reg{color:var(--sun);font-size:13px}
+.mem{text-align:center}
+.counter{background:var(--sun);color:var(--ink);border-radius:12px;padding:18px 10px;font-family:"JetBrains Mono",monospace;font-size:46px;font-weight:700}
+.counter.flash{background:var(--red);color:#fff}
+.step{background:var(--night2);border:1px dashed #6b5fd0;border-radius:8px;padding:6px 8px;margin:3px 0;font-family:"JetBrains Mono",monospace;font-size:13px}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.warn{background:var(--red);color:#fff;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600}
+.q{background:var(--night3);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+.lock{display:inline-block;padding:2px 8px;border-radius:5px;font-size:12px;font-weight:700}
+.lock.free{background:var(--green);color:var(--ink)}.lock.held{background:var(--red)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>The lost <span>update</span></h1>
+  <p>Two programs share one counter, and each adds one to it. Simple. But “add one” is really three steps — read, add, write — and when two threads interleave those steps, one addition can vanish without a trace. You choose the order.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="panel">
+    <div class="bar"><span style="color:var(--soft)">Mode:</span>
+      <button class="btn on" data-m="manual">You choose the order</button>
+      <button class="btn" data-m="auto">Random race, ×1000</button>
+      <button class="btn" data-m="lock">With a lock</button>
+      <button class="btn" data-m="core">Two cores, one cache line</button>
+      <button class="btn pink" id="reset" style="margin-left:auto">Reset</button></div>
+  </section>
+  <div class="threads">
+    <div class="thread A"><h2 style="color:var(--cyan)">Thread A adds 1 <span id="lockA"></span></h2><div id="progA"></div><div style="margin-top:6px;color:var(--soft);font-size:13px">its private register: <b id="regA" style="color:var(--sun);font-family:JetBrains Mono,monospace">–</b></div></div>
+    <div class="mem"><div style="color:var(--soft);font-size:13px;margin-bottom:6px">shared counter</div><div class="counter" id="counter">0</div><div id="expect" style="color:var(--soft);font-size:13px;margin-top:8px"></div></div>
+    <div class="thread B"><h2 style="color:var(--pink)">Thread B adds 1 <span id="lockB"></span></h2><div id="progB"></div><div style="margin-top:6px;color:var(--soft);font-size:13px">its private register: <b id="regB" style="color:var(--sun);font-family:JetBrains Mono,monospace">–</b></div></div>
+  </div>
+  <section class="panel" id="controls">
+    <div class="bar" id="stepbtns"></div>
+    <div id="log" style="margin-top:8px"></div>
+  </section>
+  <div id="autobox"></div>
+</main>
+<aside class="panel" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const OPS=[{k:'read',t:'read counter → reg'},{k:'add',t:'reg = reg + 1'},{k:'write',t:'write reg → counter'}];
+let mode='manual', counter=0, reg={A:null,B:null}, pc={A:0,B:0}, log=[], lockHolder=null, seen={}, cacheOwner=null;
+function reset(){ counter=0; reg={A:null,B:null}; pc={A:0,B:0}; log=[]; lockHolder=null; cacheOwner=null; if($('#autobox')) $('#autobox').innerHTML=''; render(); }
+function canRun(w){
+  if(pc[w]>=(mode==='lock'?5:3)) return false;
+  if(mode==='lock'){ const step=lockStep(w,pc[w]); if(step.k==='acquire') return lockHolder===null; if(step.k!=='release'&&lockHolder!==w) return false; }
+  return true;
+}
+function lockStep(w,i){ return [{k:'acquire',t:'take the lock'},...OPS,{k:'release',t:'release the lock'}][i]; }
+function stepOf(w,i){ return mode==='lock'?lockStep(w,i):OPS[i]; }
+function run(w){
+  const i=pc[w], s=stepOf(w,i);
+  if(s.k==='acquire'){ lockHolder=w; log.push({w,t:`${w}: takes the lock`}); }
+  else if(s.k==='release'){ lockHolder=null; log.push({w,t:`${w}: releases the lock`}); }
+  else if(s.k==='read'){ reg[w]=counter; log.push({w,t:`${w}: reads counter (${counter}) into its register`}); if(mode==='core'){ cacheOwner=w; } }
+  else if(s.k==='add'){ reg[w]++; log.push({w,t:`${w}: adds 1 → ${reg[w]}`}); }
+  else if(s.k==='write'){ counter=reg[w]; log.push({w,t:`${w}: writes ${reg[w]} back to counter`,write:true}); if(mode==='core') cacheOwner=w; }
+  pc[w]++; render();
+  const ns=mode==='lock'?5:3; if(pc.A>=ns&&pc.B>=ns) finish();
+}
+let verdict='';
+function finish(){
+  const ok=counter===2, nsteps=mode==='lock'?5:3;
+  const lost=log.filter(l=>l.w==='A').length&&log.filter(l=>l.w==='B').length;
+  verdict=`<div class="${ok?'note':'warn'}">Both threads finished. The counter is <b>${counter}</b>, and it should be 2. ${ok?'This ordering was safe.':'One update was lost: both threads read the counter before either wrote it back, so the second write simply covered the first.'}</div>`;
+  if(!ok) find('lose'); else if(mode==='manual'&&log.some(l=>l.w!==log[0].w)) find('safe');
+  else if(mode==='lock') find('lock');
+  render();
+}
+function render(){
+  document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
+  const nsteps=mode==='lock'?5:3;
+  ['A','B'].forEach(w=>{ $('#prog'+w).innerHTML=[...Array(nsteps)].map((_,i)=>{ const s=stepOf(w,i); return `<div class="instr ${i<pc[w]?'done':''} ${i===pc[w]&&canRun(w)?'cur':''}">${s.t}</div>`; }).join('');
+    $('#reg'+w).textContent=reg[w]==null?'–':reg[w];
+    $('#lock'+w).innerHTML=mode==='lock'?(lockHolder===w?'<span class="lock held">holds lock</span>':''):''; });
+  $('#counter').textContent=counter; $('#counter').className='counter'+(log.length&&log[log.length-1].write?' flash':''); setTimeout(()=>$('#counter').classList.remove('flash'),300);
+  $('#expect').textContent='should end at 2';
+  if(mode==='core'){ $('#expect').innerHTML=`should end at 2<br><span style="font-size:12px">cache line owned by: <b style="color:${cacheOwner==='A'?'var(--cyan)':cacheOwner==='B'?'var(--pink)':'var(--soft)'}">${cacheOwner||'neither'}</b></span>`; }
+  const done=pc.A>=nsteps&&pc.B>=nsteps;
+  if(!done) verdict='';
+  $('#stepbtns').innerHTML=mode==='auto'?'':`<button class="btn" id="rA" ${canRun('A')&&!done?'':'disabled'} style="background:var(--cyan);color:var(--ink)">▶ Run A’s next step</button><button class="btn" id="rB" ${canRun('B')&&!done?'':'disabled'} style="background:var(--pink)">▶ Run B’s next step</button>`+
+    (mode==='lock'&&!canRun('A')&&!canRun('B')&&!done?'<span class="warn" style="padding:6px 10px">Both threads are blocked, waiting for the lock. In a real deadlock nobody moves; here, one already holds it, so run its steps.</span>':'');
+  const rA=$('#rA'), rB=$('#rB'); if(rA) rA.onclick=()=>run('A'); if(rB) rB.onclick=()=>run('B');
+  $('#log').innerHTML=verdict+log.slice().reverse().map(l=>`<div class="step" style="border-color:${l.w==='A'?'var(--cyan)':'var(--pink)'}">${l.t}</div>`).join('');
+  renderQs();
+}
+$('#controls').addEventListener('click',e=>{}); // handlers attached in render
+document.querySelector('main').addEventListener('click',e=>{ const b=e.target.closest('[data-m]'); if(b){ mode=b.dataset.m; reset(); if(mode==='auto') autorun(); if(mode==='core') find('core'); } });
+$('#reset').onclick=()=>{ reset(); if(mode==='auto') autorun(); };
+function autorun(){
+  // Run 1000 races with random interleavings; count how often an update is lost.
+  let lost=0, results={}; 
+  for(let r=0;r<1000;r++){ let c=0, rg={A:null,B:null}, p={A:0,B:0};
+    while(p.A<3||p.B<3){ const opts=[]; if(p.A<3) opts.push('A'); if(p.B<3) opts.push('B'); const w=opts[Math.random()*opts.length|0];
+      const i=p[w]; if(i===0) rg[w]=c; else if(i===1) rg[w]++; else c=rg[w]; p[w]++; }
+    results[c]=(results[c]||0)+1; if(c!==2) lost++; }
+  $('#autobox').innerHTML=`<section class="panel"><h2>1000 random races</h2>
+    <div class="bar">${Object.entries(results).sort().map(([v,n])=>`<div style="text-align:center"><div style="font-family:JetBrains Mono,monospace;font-size:26px;color:${v==='2'?'var(--green)':'var(--red)'}">${v}</div><div style="background:${v==='2'?'var(--green)':'var(--red)'};height:${n/1000*140+4}px;width:60px;border-radius:4px 4px 0 0"></div><div style="color:var(--soft);font-size:13px">${(n/10).toFixed(1)}%</div></div>`).join('')}</div>
+    <p style="color:var(--soft);font-size:14px">${lost} of 1000 ended wrong. The bug does not happen every time — it happens just often enough to be nearly impossible to reproduce on demand. That is what makes race conditions the hardest bugs to catch.</p></section>`;
+  find('auto');
+}
+const FINDS=[
+ ['lose','In manual mode, find an order that loses an update (ends at 1).'],
+ ['safe','Find an order that ends correctly at 2.'],
+ ['auto','Run the random race a thousand times.'],
+ ['lock','Switch on the lock. Try to make it lose an update now.'],
+ ['core','Look at the two-cores mode.']];
+const TELL={
+ lose:'A: read (0). B: read (0). A: add → 1. B: add → 1. A: write 1. B: write 1. Both threads did their job perfectly; both saw 0, both wrote 1, and the counter that should say 2 says 1. Nothing was corrupted. An update was simply overwritten before anyone read it. This is the lost update.',
+ safe:'Run all three of A’s steps before B starts, or all of B’s before A, and it works. The danger is only in the overlap: when B reads before A has written. The correct answer and the wrong answer come from the very same instructions, in a different order.',
+ auto:'The wrong answer appears in only a fraction of runs, and which fraction depends on timing you cannot control. A race condition is a bug that hides: it passes every test on your machine and fails once a day on the server, and no one can say why.',
+ lock:'You cannot lose an update now. The lock lets only one thread into the read-add-write section at a time; the other must wait at “take the lock” until the first releases it. The three steps are made to behave as one indivisible step. This is a mutex, and it is the standard cure.',
+ core:'Here nothing is lost, because the lock still protects the counter, but watch the “owned by” line. Each time a thread touches the shared value, the cache line bounces to its core, and the other core’s copy is thrown away. When two cores fight over one line like this, it is called false sharing, and it can make locked code slower than single-threaded code.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+reset();
+</script>

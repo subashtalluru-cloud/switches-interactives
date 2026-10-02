@@ -1,0 +1,165 @@
+<meta charset="utf-8">
+<!-- E2 · The Crank of Differences — Switches All the Way Down, Chapter 3 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#E9ECE6;--panel:#F6F7F3;--ink:#1F2A36;--muted:#5E6A72;--wire:#8E979C;--live:#F2A900;--chip:#25272C;--line:#CBD1CA;--bad:#B5462F;--good:#3C7A4E;--brass:#B08D3C}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:16px;display:grid;grid-template-columns:1fr 330px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:30px;margin:0} h2{font-size:15px;margin:0 0 6px}
+header p{margin:4px 0 0;color:var(--muted);max-width:75ch}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.btn{font:inherit;font-size:14px;border:1px solid var(--ink);background:#fff;color:var(--ink);border-radius:4px;padding:6px 11px;cursor:pointer}
+.btn.dark{background:var(--ink);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--live);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px}
+.engine{display:flex;gap:14px;justify-content:center;background:#2B2A27;border-radius:8px;padding:18px 12px;overflow-x:auto}
+.col{display:flex;flex-direction:column;align-items:center;gap:6px}
+.col .name{color:#E8D9A8;font-size:12px;text-align:center;min-height:32px}
+.wheels{display:flex;flex-direction:column-reverse;gap:3px}
+.wheel{width:44px;height:30px;border-radius:5px;background:linear-gradient(#8C6D28,#D9B869 40%,#8C6D28);display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:18px;font-weight:600;color:#1a1408;position:relative;transition:transform .08s}
+.wheel.hot{box-shadow:0 0 0 3px var(--live);transform:scale(1.08)}
+.wheel.carry::after{content:'+1';position:absolute;right:-22px;top:-12px;font-size:11px;color:var(--live)}
+.seed{width:70px;font-family:"JetBrains Mono",monospace;font-size:14px;padding:3px;border-radius:3px;border:1px solid #777;text-align:right}
+.crank{width:90px;height:90px;border-radius:50%;border:6px solid var(--brass);position:relative;cursor:pointer;background:#3a3833;margin:0 auto}
+.crank::after{content:'';position:absolute;left:50%;top:50%;width:36px;height:6px;background:var(--brass);transform-origin:0 50%;transform:rotate(var(--a,0deg))}
+.crank:focus-visible{outline:3px solid var(--live)}
+table{border-collapse:collapse;font-family:"JetBrains Mono",monospace;font-size:13px;width:100%}
+th,td{border-bottom:1px solid var(--line);padding:3px 6px;text-align:right}
+th{color:var(--muted);font-weight:600}
+.ok{color:var(--good);font-weight:600}.no{color:var(--bad);font-weight:600}
+.say{min-height:24px}
+.tri{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px}
+.hint{background:#fff;border-left:3px solid var(--live);padding:8px 10px;font-size:14px;margin-top:6px}
+.win{background:#EAF3EC;border:1px solid #BFD7C6;border-radius:5px;padding:10px;margin-top:8px;font-size:14px}
+@media (max-width:950px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>The crank of differences</h1>
+  <p>Babbage’s Difference Engine could do exactly one thing: add one column of number wheels into the next. With nothing else, it printed tables of polynomials for as long as you turned the handle. Here is one. Turn it.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:10px">
+  <div class="bar" id="levels"></div>
+  <div class="panel say" id="task"></div>
+  <div class="engine" id="engine"></div>
+  <div class="bar" style="justify-content:center">
+    <div class="crank" id="crank" tabindex="0" role="button" aria-label="Turn the crank once"></div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn dark" id="turn">Turn once</button>
+      <button class="btn" id="turn10">Turn ten times</button>
+      <button class="btn" id="reset">Reset the wheels</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn" id="addcol">Add a column</button>
+      <button class="btn" id="delcol">Remove a column</button>
+      <label style="font-size:13px"><input type="checkbox" id="slow" checked> Show every carry</label>
+    </div>
+  </div>
+  <div class="panel say" id="say"></div>
+  <h2>The method, laid bare: a difference table</h2>
+  <div class="tri" id="tri"></div>
+</main>
+<aside style="display:flex;flex-direction:column;gap:10px">
+  <div class="panel"><h2>What the engine printed</h2><table id="printed"></table></div>
+  <div class="panel"><button class="btn" id="hintbtn">Give me a hint</button><div id="hint"></div><div id="win"></div></div>
+</aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const LEVELS=[
+ {name:'Babbage’s demonstration',f:x=>x*x+x+41,fs:'x² + x + 41',cols:3,seed:[41,2,2],given:true,
+  say:'The engine is set up for x² + x + 41, the table Babbage liked to show visitors. Turn the crank and watch the columns pour into each other, right to left. The printed column on the right is checked against the true value.',
+  hints:['Look at the rightmost column. Does it ever change? That constant is what makes a polynomial a polynomial.','Every value in this formula up to x = 39 is a prime number. The engine has no idea: it only adds. Keep turning past 40.'],
+  win:'At x = 40 the engine prints 1681, which is 41 × 41, and the run of primes ends. The engine did not notice, because it never knew what a prime was. It only ever added one column into the next. That is the whole mechanism: no multiplication, no squaring, one trivial operation repeated.',
+  done:s=>s.x>=41},
+ {name:'Set it up yourself',f:x=>2*x*x+3*x+1,fs:'2x² + 3x + 1',cols:3,seed:[0,0,0],given:false,
+  say:'Now the wheels are blank. Enter the three starting numbers so the engine prints 2x² + 3x + 1. Then turn it and see whether you were right.',
+  hints:['Work out the first few values by hand: x = 0, 1, 2, 3. Write them in a row.','Subtract each value from the next: those are the first differences. Do the same to those: the second differences. What do you notice?',
+    'The starting numbers are the first entry of each row: the first value, the first first-difference, and the constant second difference. The table below will fill in as you type.'],
+  win:'The setup is the only place thinking happens. Once the first column of the difference table is on the wheels, the rest is pure repetition, which is exactly what a machine is good at and a tired human clerk is not. Babbage built the engine because the printed tables of his day were riddled with human copying errors.',
+  done:s=>s.x>=8&&s.allOk},
+ {name:'A cube',f:x=>x*x*x,fs:'x³',cols:3,seed:[0,0,0],given:false,
+  say:'Make the engine print cubes: 0, 1, 8, 27, 64… Three columns will not be enough. Add one.',
+  hints:['Build the difference table for 0, 1, 8, 27, 64, 125. How many rows until the numbers stop changing?','A polynomial of degree n needs n differences before they become constant, so n + 1 columns. A cube needs four.','Starting numbers: 0, 1, 6, 6.'],
+  win:'A degree-three polynomial needs three rounds of differences before they settle, so four columns. Babbage’s Difference Engine No. 2 had eight, enough for seventh-degree polynomials, 31 digits each. The Science Museum built it from his drawings in 1991, and it works.',
+  done:s=>s.x>=6&&s.allOk&&s.cols===4},
+ {name:'Something it cannot do',f:x=>Math.pow(2,x),fs:'2ˣ',cols:4,seed:[1,1,1,1],given:true,
+  say:'The engine is set up with the first four values of 2ˣ: 1, 2, 4, 8. Turn it and compare what it prints with the truth.',
+  hints:['Build the difference table for powers of two. Do the differences ever become constant?','They never do: each row of differences is the same sequence again. No finite number of columns can hold it. The engine can only follow 2ˣ for a while before it drifts.'],
+  win:'The engine can only tabulate polynomials, because its rightmost column never changes. But over a short stretch almost any smooth function looks like a polynomial, so table-makers reset the wheels every so often with freshly calculated starting values. That is how logarithm and sine tables were produced. And it is the first appearance of an idea this book will keep meeting: a machine that does one simple thing perfectly, and a human who decides what that thing should be.',
+  done:s=>s.x>=6}
+];
+let L=0, S={x:0,cols:3,w:[],print:[],busy:false,allOk:true,angle:0}, hintN=0, solved={};
+function setup(){
+  const lv=LEVELS[L]; S.cols=lv.cols; S.w=lv.given?lv.seed.slice():Array(S.cols).fill(0);
+  S.x=0; S.print=[]; S.allOk=true; hintN=0; $('#hint').innerHTML=''; $('#win').innerHTML='';
+  render(); record();
+}
+function record(){ const v=S.w[0], t=LEVELS[L].f(S.x); S.print.push({x:S.x,v,t}); if(v!==t) S.allOk=false; }
+const DIG=7;
+function digits(n){ const s=String(Math.abs(n)).padStart(DIG,'0').slice(-DIG); return [...s].reverse().map(Number); }
+function render(hot){
+  const lv=LEVELS[L];
+  $('#levels').innerHTML=LEVELS.map((l,i)=>`<button class="btn ${i===L?'dark':''}" data-l="${i}">${i+1}. ${l.name}${solved[i]?' ✓':''}</button>`).join('');
+  $('#task').innerHTML=`<b>Target: ${lv.fs}.</b> ${lv.say}`;
+  const names=['Value (printed)','1st difference','2nd difference','3rd difference','4th difference','5th difference'];
+  $('#engine').innerHTML=S.w.map((v,c)=>{
+    const d=digits(v), h=hot&&hot.col===c;
+    return `<div class="col"><div class="name">${names[c]}</div><div class="wheels">${d.map((x,i)=>`<div class="wheel ${h&&hot.digit===i?'hot':''} ${h&&hot.carry===i?'carry':''}">${x}</div>`).join('')}</div>`+
+      `<div style="color:#E8D9A8;font-family:JetBrains Mono,monospace">${v<0?'−':''}${Math.abs(v).toLocaleString()}</div>`+
+      (S.x===0&&!lv.given?`<input class="seed" data-c="${c}" value="${v}" aria-label="${names[c]} starting value">`:'')+`</div>`;
+  }).join('<div style="color:#777;align-self:center;font-size:22px">◀</div>');
+  $('#printed').innerHTML='<tr><th>x</th><th>engine</th><th>true</th><th></th></tr>'+S.print.slice(-18).map(p=>`<tr><td>${p.x}</td><td>${p.v.toLocaleString()}</td><td>${p.t.toLocaleString()}</td><td>${p.v===p.t?'<span class="ok">✓</span>':'<span class="no">✗</span>'}</td></tr>`).join('');
+  renderTri();
+  $('#addcol').disabled=S.x>0||S.cols>=6||lv.given; $('#delcol').disabled=S.x>0||S.cols<=2||lv.given;
+  $('#hintbtn').style.display=hintN<lv.hints.length?'':'none';
+  $('#crank').style.setProperty('--a',S.angle+'deg');
+}
+function renderTri(){
+  // The wheels always hold one diagonal of this table: the entries at position x. Each turn moves one step along it.
+  const f=LEVELS[L].f, n=9, x0=Math.max(0,S.x-4), rows=[[...Array(n)].map((_,i)=>f(x0+i))];
+  for(let r=1;r<Math.max(S.cols,4)+1;r++){ const p=rows[r-1]; rows.push(p.slice(1).map((v,i)=>v-p[i])); }
+  const cw=74; let h='';
+  rows.forEach((row,r)=>row.forEach((v,i)=>{ const x=66+i*cw+r*cw/2, y=24+r*38, seed=x0+i===S.x&&r<S.cols, flat=r>0&&row.every(u=>u===row[0]);
+    h+=`<rect x="${x-32}" y="${y-16}" width="64" height="26" rx="4" fill="${seed?'#FFF3CC':'#fff'}" stroke="${seed?'var(--live)':flat?'var(--good)':'var(--line)'}" stroke-width="${seed||flat?2:1}"/><text x="${x}" y="${y+2}" text-anchor="middle" font-size="12" font-family="JetBrains Mono,monospace" fill="var(--ink)">${Math.abs(v)>99999?v.toExponential(1):v}</text>`; }));
+  rows.forEach((_,r)=>{ h+=`<text x="4" y="${24+r*38+2}" font-size="11" fill="var(--muted)">${r===0?'f':'Δ'+r}</text>`; });
+  $('#tri').innerHTML=`<svg viewBox="0 0 ${66+n*cw} ${30+rows.length*38}" style="width:100%;min-width:560px;height:auto">${h}</svg><div style="font-size:13px;color:var(--muted)">Top row: the true values of ${LEVELS[L].fs} from x = ${x0}. Each row below: the gaps between neighbours in the row above. Highlighted: the diagonal the engine’s wheels should hold right now (x = ${S.x}); at x = 0 it is the starting setup. Each turn of the crank steps one place along. Green outline: a row that has gone constant.</div>`;
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+// One turn: each column receives the column to its right, working left to right so each uses
+// the neighbour's value from before this turn. Each addition is done digit by digit, carries rippling up.
+async function turn(){
+  if(S.busy) return; S.busy=true;
+  const slow=$('#slow').checked, old=S.w.slice();
+  for(let c=0;c<S.cols-1;c++){
+    if(slow){
+      const a=digits(S.w[c]), b=digits(old[c+1]); let carry=0;
+      if(S.w[c]>=0&&old[c+1]>=0){
+        for(let i=0;i<DIG;i++){ const s=a[i]+b[i]+carry; a[i]=s%10; carry=s>9?1:0;
+          S.w[c]=+a.slice().reverse().join(''); render({col:c,digit:i,carry:carry?i:-1});
+          $('#say').textContent=`Adding the ${['1st difference','2nd difference','3rd difference','4th difference','5th difference'][c]} into the column to its left, one wheel at a time${carry?': a carry to the next wheel':''}.`;
+          await sleep(90); if(!carry&&a.slice(i+1).every((_,j)=>b[i+1+j]===0)) break; }
+      }
+      S.w[c]=old[c]+old[c+1];
+    } else S.w[c]=old[c]+old[c+1];
+    S.angle+=360/(S.cols-1);
+  }
+  S.x++; record(); render();
+  const lv=LEVELS[L];
+  $('#say').textContent=`x = ${S.x}. ${S.w[0]===lv.f(S.x)?'Printed value matches.':'Printed value is wrong: '+S.w[0].toLocaleString()+' instead of '+lv.f(S.x).toLocaleString()+'.'}`;
+  if(lv.done(S)&&!solved[L]){ solved[L]=1; $('#win').innerHTML=`<div class="win">${lv.win}</div>`; render(); }
+  S.busy=false;
+}
+$('#turn').onclick=turn; $('#crank').onclick=turn; $('#crank').onkeydown=e=>{ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); turn(); } };
+$('#turn10').onclick=async()=>{ const s=$('#slow').checked; $('#slow').checked=false; for(let i=0;i<10;i++) await turn(); $('#slow').checked=s; };
+$('#reset').onclick=()=>{ const keep=S.w.slice(0); setup(); if(!LEVELS[L].given){ /* keep blank */ } };
+$('#levels').onclick=e=>{ const b=e.target.closest('[data-l]'); if(b){ L=+b.dataset.l; setup(); } };
+$('#engine').addEventListener('change',e=>{ const i=e.target.closest('.seed'); if(!i) return; S.w[+i.dataset.c]=Math.round(+i.value)||0; S.print=[]; S.allOk=true; record(); render(); });
+$('#addcol').onclick=()=>{ S.cols++; S.w.push(0); S.print=[]; S.allOk=true; record(); render(); };
+$('#delcol').onclick=()=>{ S.cols--; S.w.pop(); S.print=[]; S.allOk=true; record(); render(); };
+$('#hintbtn').onclick=()=>{ const h=LEVELS[L].hints; if(hintN<h.length){ $('#hint').innerHTML+=`<div class="hint">${h[hintN++]}</div>`; render(); } };
+setup(); $('#say').textContent='Turn the crank (click it, or press Turn once).';
+</script>

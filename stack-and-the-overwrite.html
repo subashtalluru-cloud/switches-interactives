@@ -1,0 +1,187 @@
+<meta charset="utf-8">
+<!-- The Stack and the Overwrite — Switches All the Way Down, Chapter 20 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--orange)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.orange{background:var(--orange);color:#fff;border-color:var(--orange)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+pre.code{margin:0;background:#FAFBFE;border:1px solid var(--line);border-radius:10px;padding:10px 0;font-family:"JetBrains Mono",monospace;font-size:13px}
+pre.code div{padding:2px 12px;white-space:pre}
+pre.code div.now{background:#FFF3D6;font-weight:700}
+.stack{display:flex;flex-direction:column;gap:6px;min-height:60px}
+.frame{border:2px solid var(--cyan);background:#E4F0FA;border-radius:10px;padding:8px 12px;font-family:"JetBrains Mono",monospace;font-size:13px;animation:pop .25s}
+.frame.main{border-color:var(--soft);background:var(--bg)}
+.frame.top{box-shadow:0 0 0 3px var(--sun)}
+.frame b{font-family:Barlow;font-weight:700}
+.slot{border:2px dashed var(--line);border-radius:10px;padding:5px 12px;color:#B7BCCB;font-size:12px}
+@keyframes pop{from{transform:scale(.95);opacity:.3}}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:20px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.say{min-height:44px;font-size:15px}
+.grp{margin:8px 0 2px;font-size:12px;font-weight:700;color:var(--soft)}
+.cells{display:flex;flex-wrap:wrap;gap:4px}
+.cell{width:46px;border-radius:7px;border:2px solid var(--line);text-align:center;padding:4px 0;font-family:"JetBrains Mono",monospace;font-size:12px;background:#fff}
+.cell i{display:block;font-style:normal;font-size:15px;font-weight:700}
+.cell.buf{border-color:var(--cyan);background:#E4F0FA}
+.cell.can{border-color:var(--sun);background:#FFF3D6}
+.cell.ret{border-color:var(--violet);background:#EEE8FB}
+.cell.cal{border-color:#C9CDDA;background:var(--bg)}
+.cell.hit{border-color:var(--red);background:#FBDADA;color:#8A1A1A}
+.note{background:#FDEFE0;border:1px solid #F5CFA6;border-radius:8px;padding:10px 12px;font-size:14px}
+.bad{background:#FBDADA;border:1px solid #F0B0B0;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600;color:#8A1A1A}
+.good{background:#E4F6EE;border:1px solid #B7E4CE;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+input[type=text]{font:inherit;font-family:"JetBrains Mono",monospace;font-size:16px;border:1px solid var(--line);border-radius:6px;padding:6px 10px;width:250px}
+input[type=range]{accent-color:var(--pink)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.cols{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>The stack and the <span>overwrite</span></h1>
+  <p>Every time a routine calls another, the processor needs somewhere to remember where to come back to. That somewhere is the stack, and it is just ordinary memory. First watch it grow and shrink during a recursive call. Then see what happens when a program writes past the end of its own local array.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card"><div class="bar"><button class="btn on" data-t="rec">1 · Calls and returns</button><button class="btn" data-t="buf">2 · A local buffer</button></div></section>
+
+  <section id="rec" class="card">
+    <div class="bar">
+      <span style="color:var(--soft)">compute fact(</span><input type="range" id="n" min="1" max="8" value="4" aria-label="n"><b id="nv">4</b><span style="color:var(--soft)">)</span>
+      <button class="btn" id="base">Base case: present</button>
+      <button class="btn orange" id="step">Step</button><button class="btn" id="run">Run</button><button class="btn" id="reset">Reset</button>
+    </div>
+    <div class="cols" style="margin-top:12px">
+      <div><h2>The program</h2><pre class="code" id="code"></pre></div>
+      <div><h2>The stack <span style="font-weight:400;font-size:12px;color:var(--soft)">(grows downward; newest frame at the bottom)</span></h2><div class="stack" id="stack"></div></div>
+    </div>
+    <div class="say" id="say" style="margin-top:10px"></div>
+    <div class="read" id="rread"></div>
+  </section>
+
+  <section id="buf" class="card" style="display:none">
+    <div class="bar">
+      <span style="color:var(--soft)">greet( name = </span><input type="text" id="name" value="Ada" maxlength="18" aria-label="name"><span style="color:var(--soft)">)</span>
+      <button class="btn orange" id="go">Run greet()</button>
+      <button class="btn" id="bounds">Bounds-checked copy: off</button>
+      <button class="btn" id="canary">Stack canary: off</button>
+    </div>
+    <pre class="code" style="margin-top:10px"><div>void greet(char *name) {</div><div>    char buffer[8];          // lives in this routine's stack frame</div><div>    strcpy(buffer, name);    // copies name, and its end-marker, with no length check</div><div>    printf("Hello, %s\n", buffer);</div><div>}                            // ← returns to the address saved beside the buffer</div></pre>
+    <div id="mem"></div>
+    <div class="say" id="bsay" style="margin-top:10px"></div>
+  </section>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), CAP=12;
+let seen={};
+// ---------- 1. calls and returns ----------
+const CODE=['def fact(n):','    if n == 0: return 1          # line 2: the base case','    return n * fact(n - 1)       # line 3: waits here for the answer','print(fact(N))                    # line 4: the call site'];
+let baseCase=true, events=[], ei=0, stack=[], maxDepth=0, timer=null, lastLine=0, said='';
+function build(){
+  events=[]; const n=+$('#n').value;
+  (function rec(k,depth,ret){
+    events.push({t:'call',k,depth,ret});
+    if(depth>=CAP){ events.push({t:'overflow'}); return null; }
+    if(baseCase&&k===0){ events.push({t:'ret',k,depth,v:1}); return 1; }
+    const sub=rec(k-1,depth+1,3); if(sub===null) return null;
+    const v=k*sub; events.push({t:'ret',k,depth,v}); return v;
+  })(n,1,4);
+  ei=0; stack=[]; maxDepth=0; lastLine=0; said='Press Step to run the first instruction.'; rrender();
+}
+function stepRec(){
+  if(ei>=events.length) return false;
+  const e=events[ei++];
+  if(e.t==='call'){ stack.push({k:e.k,ret:e.ret,v:null}); maxDepth=Math.max(maxDepth,stack.length); lastLine=e.k===0&&baseCase?2:3;
+    said=`<b>Call.</b> fact(${e.k}) is called. The processor pushes a new frame holding two things: <b>where to come back to</b> (${e.ret===4?'the call site, line 4':'line 3 of the routine that called it'}) and its own copy of <b>n = ${e.k}</b>, then jumps in.`; }
+  else if(e.t==='ret'){ lastLine=e.k===0?2:3; const f=stack[stack.length-1]; f.v=e.v;
+    said=`<b>Return.</b> fact(${e.k}) has its answer, <b>${e.v}</b>. It pops its frame and jumps to the return address it saved: ${f.ret===4?'back to line 4, the end':'line 3 of the caller, which can now finish its multiplication'}.`;
+    rrender(); setTimeout(()=>{ stack.pop(); rrender(); },250); if(e.depth===1) find('unwind'); return true; }
+  else if(e.t==='overflow'){ said=`<b>Stack overflow.</b> The region reserved for the stack is full — ${CAP} frames — and with no base case the routine keeps calling itself. The next push would run into memory that belongs to something else, so the program is stopped.`; find('overflow'); }
+  if(e.t==='call'&&stack.length>=5) find('depth');
+  rrender(); return true;
+}
+function rrender(){
+  $('#code').innerHTML=CODE.map((l,i)=>`<div class="${lastLine===i+1?'now':''}">${l.replace('fact(N)','fact('+$('#n').value+')').replace(/ +# line \d: /,'   # ').replace(/ +#.*$/,m=>m)}</div>`).join('');
+  const slots=[]; slots.push(`<div class="frame main"><b>main</b> — waiting for fact(${$('#n').value}) to give an answer</div>`);
+  stack.forEach((f,i)=>slots.push(`<div class="frame ${i===stack.length-1?'top':''}"><b>fact(n=${f.k})</b> · return address: ${f.ret===4?'line 4 (main)':'line 3 (fact)'}<br>pending: ${f.v!=null?`<b style="color:var(--green)">returning ${f.v}</b>`:(f.k===0&&baseCase?'base case reached':`${f.k} × fact(${f.k-1}) — not yet known`)}</div>`));
+  const free=CAP-stack.length; for(let i=0;i<Math.min(free,3);i++) slots.push('<div class="slot">free stack space</div>'); if(free>3) slots.push(`<div class="slot">… ${free-3} more frames of room</div>`);
+  $('#stack').innerHTML=slots.join('');
+  $('#say').innerHTML=said;
+  $('#rread').innerHTML=`<div><small>Frames on the stack now</small><b>${stack.length}</b></div><div><small>Deepest so far</small><b>${maxDepth}</b></div><div><small>Stack space used</small><b>${Math.round(maxDepth/CAP*100)}%</b><small>of ${CAP} frames</small></div><div><small>Instructions executed</small><b>${ei} / ${events.length}</b></div>`;
+  renderQs();
+}
+$('#step').onclick=()=>{ stopRun(); stepRec(); };
+$('#run').onclick=()=>{ if(timer){ stopRun(); return; } $('#run').textContent='Pause'; timer=setInterval(()=>{ if(!stepRec()) stopRun(); },650); };
+function stopRun(){ if(timer){ clearInterval(timer); timer=null; } $('#run').textContent='Run'; }
+$('#reset').onclick=()=>{ stopRun(); build(); };
+$('#n').oninput=e=>{ $('#nv').textContent=e.target.value; stopRun(); build(); };
+$('#base').onclick=()=>{ baseCase=!baseCase; $('#base').textContent=`Base case: ${baseCase?'present':'REMOVED'}`; $('#base').classList.toggle('on',!baseCase); CODE[1]=baseCase?'    if n == 0: return 1          # line 2: the base case':'    # (base case deleted)'; stopRun(); build(); };
+
+// ---------- 2. a local buffer ----------
+const RET0=0x00401A2C, CANARY=[0xA5,0x5A,0xC3,0x3C], CODE_LO=0x00401000, CODE_HI=0x0040FFFF;
+let bounded=false, canaryOn=false;
+const hex=v=>v.toString(16).toUpperCase().padStart(2,'0');
+const ch=b=>b===0?'␀':(b>=32&&b<127?String.fromCharCode(b):'·');
+function layout(){ const L={buf:[0,8]}; let o=8; if(canaryOn){ L.can=[o,o+4]; o+=4; } L.ret=[o,o+4]; o+=4; L.cal=[o,o+8]; L.size=o+8; return L; }
+function run(){
+  const L=layout(), m=new Array(L.size).fill(0), name=[...$('#name').value].map(c=>c.charCodeAt(0)&255);
+  const orig=[0x2C,0x1A,0x40,0x00]; orig.forEach((b,i)=>m[L.ret[0]+i]=b); if(canaryOn) CANARY.forEach((b,i)=>m[L.can[0]+i]=b);
+  [0x43,0x61,0x6C,0x6C,0x65,0x72,0x21,0x00].forEach((b,i)=>m[L.cal[0]+i]=b);          // "Caller!"
+  const bytes=[...name,0], limit=bounded?7:bytes.length; const written=[];
+  if(bounded){ for(let i=0;i<Math.min(7,name.length);i++){ m[i]=name[i]; written.push(i); } m[Math.min(7,name.length)]=0; written.push(Math.min(7,name.length)); }
+  else for(let i=0;i<bytes.length&&i<L.size;i++){ m[i]=bytes[i]; written.push(i); }
+  const retAddr=(m[L.ret[0]]|(m[L.ret[0]+1]<<8)|(m[L.ret[0]+2]<<16)|(m[L.ret[0]+3]<<24))>>>0;
+  const canaryBad=canaryOn&&CANARY.some((b,i)=>m[L.can[0]+i]!==b), retBad=retAddr!==RET0, calBad=m.slice(L.cal[0],L.cal[1]).join()!==[0x43,0x61,0x6C,0x6C,0x65,0x72,0x21,0x00].join();
+  const grp=(key,cls,label)=>{ const [a,b]=L[key]; return `<div class="grp">${label}</div><div class="cells">${m.slice(a,b).map((v,i)=>`<div class="cell ${cls} ${written.includes(a+i)&&(key!=='buf')?'hit':''}"><i>${ch(v)}</i>${hex(v)}</div>`).join('')}</div>`; };
+  $('#mem').innerHTML=grp('buf','buf','buffer[8] — the routine’s local array (low addresses)')+(canaryOn?grp('can','can','canary — a guard value placed here when the routine started'):'')+grp('ret','ret',`saved return address — read as one number, little-endian: <span style="font-family:JetBrains Mono,monospace;color:${retBad?'var(--red)':'var(--ink)'}">0x${retAddr.toString(16).toUpperCase().padStart(8,'0')}</span> ${retBad?'(was 0x00401A2C)':''}`)+grp('cal','cal','the caller’s own data (higher addresses)');
+  let out;
+  const len=name.length;
+  if(bounded&&len>7){ out=`<div class="good"><b>Truncated, safely.</b> The bounds-checked copy stopped after 7 characters and the end-marker. The name was cut short, but nothing outside the buffer was touched, and the routine returned normally to 0x00401A2C.</div>`; find('bounds'); }
+  else if(canaryBad){ out=`<div class="good"><b>Stack smashing detected — aborted.</b> Before returning, the routine checked its canary. The overflow had changed it, so the program stops on purpose instead of jumping anywhere. A crash you chose is far better than a hijack you did not.</div>`; find('canary'); }
+  else if(retBad){
+    const unmapped=retAddr<CODE_LO||retAddr>CODE_HI;
+    out=`<div class="bad">The routine finished and executed “return”: it loaded the number now sitting where its return address used to be, <b>0x${retAddr.toString(16).toUpperCase().padStart(8,'0')}</b>, and jumped there. ${unmapped?'No code exists at that address, so the processor faults and the program dies.':'That is inside the program’s code, but it is not where the call came from, so the program carries on from the wrong place.'} The text you typed became the destination.</div>`; find('overwrite'); }
+  else if(calBad){ out=`<div class="bad">Overflowed into the caller’s data (“Caller!” is damaged) without reaching the return address — silent corruption, no crash. Often worse than a crash, because nothing says it happened.</div>`; find('overwrite'); }
+  else { out=`<div class="good"><b>Normal.</b> “${$('#name').value}” fits in 8 bytes with its end-marker, so the routine returns to 0x00401A2C and the program carries on.</div>`; find('fit'); }
+  $('#bsay').innerHTML=out;
+}
+$('#go').onclick=run; $('#name').addEventListener('input',run);
+$('#bounds').onclick=()=>{ bounded=!bounded; $('#bounds').textContent=`Bounds-checked copy: ${bounded?'on':'off'}`; $('#bounds').classList.toggle('on',bounded); run(); };
+$('#canary').onclick=()=>{ canaryOn=!canaryOn; $('#canary').textContent=`Stack canary: ${canaryOn?'on':'off'}`; $('#canary').classList.toggle('on',canaryOn); run(); };
+document.querySelector('main').addEventListener('click',e=>{ const b=e.target.closest('[data-t]'); if(!b) return;
+  document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b)); $('#rec').style.display=b.dataset.t==='rec'?'':'none'; $('#buf').style.display=b.dataset.t==='buf'?'':'none'; if(b.dataset.t==='buf') run(); });
+const FINDS=[
+ ['depth','Step through fact(4) until the stack is five frames deep.'],
+ ['unwind','Run it to the end and watch every frame come off.'],
+ ['overflow','Remove the base case and run it.'],
+ ['fit','In the buffer tab, run greet() with a short name.'],
+ ['overwrite','Type a name longer than 8 characters and see what happens to the saved return address.'],
+ ['bounds','Turn on the bounds-checked copy and try the same long name.'],
+ ['canary','Turn the bounds check off, the canary on, and type a long name.']];
+const TELL={
+ depth:'Each active call has its own frame, holding its own copy of n and the address to return to. fact(4) cannot finish until fact(3) does, which waits on fact(2), and so on: four calls are all “in progress” at once, and the stack is the only record of what each is waiting for.',
+ unwind:'The frames come off in exactly the reverse order they went on: the most recent call returns first. That last-in, first-out discipline is not a design choice someone made; it is forced by the nature of calls, and it is why the structure is called a stack.',
+ overflow:'Without a base case, every call makes another and none ever returns. Each frame uses a little memory, and the region set aside for the stack is finite, so it runs out within a fraction of a second. This is the actual meaning of “stack overflow”, long before it was the name of a website.',
+ fit:'A short name fits: its characters and the end-marker land inside the 8-byte buffer, the saved return address is untouched, and the routine hands control back to exactly where it was called from.',
+ overwrite:'The return address is not special memory. It sits in the same frame as the buffer, just beside it, and strcpy writes upward through memory without ever asking how big the buffer is. A long enough name runs off the end of the buffer and straight over the return address; when the routine returns, the processor does what it always does: it jumps to whatever number is saved there. The attacker’s data has become the program’s next instruction address. This is the buffer overflow from Chapter 11, now fully explicable.',
+ bounds:'The cure at the source: never write more than the buffer holds. The name is truncated, which is a nuisance, but the frame stays intact. Modern languages do this check automatically; C leaves it to the programmer, which is the whole history of this bug.',
+ canary:'The canary is a guard value the compiler places between the buffer and the return address. A linear overflow cannot reach the return address without crossing it, and before every return the routine checks it. The program still fails, but it fails safely and on purpose. Defences like this make the overflow much harder to exploit; they do not remove the bug.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+build(); renderQs();
+</script>

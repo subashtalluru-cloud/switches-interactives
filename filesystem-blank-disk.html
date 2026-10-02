@@ -1,0 +1,126 @@
+<meta charset="utf-8">
+<!-- A Filesystem on a Blank Disk — Switches All the Way Down, Chapter 39 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--cyan)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.cyan{background:var(--cyan);color:#fff;border-color:var(--cyan)}.btn.red{background:var(--red);color:#fff;border-color:var(--red)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.cols{display:grid;grid-template-columns:1fr 300px;gap:14px}
+.disk{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+.blk{border:1px solid var(--line);border-radius:8px;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:13px;position:relative;cursor:default}
+.blk small{font-family:Barlow;font-size:10px;color:var(--soft);position:absolute;top:3px;left:5px}
+.blk.free{background:#fff}
+.blk.dir{background:#E4F0FA;border-color:var(--cyan)}
+.blk.new{animation:flash .5s}
+@keyframes flash{from{background:var(--sun)}}
+.dot{width:12px;height:12px;border-radius:3px}
+.dir table{width:100%;border-collapse:collapse;font-size:13px}
+.dir td{padding:4px 6px;border-bottom:1px solid var(--line);font-family:"JetBrains Mono",monospace}
+.freemap{display:flex;gap:3px;flex-wrap:wrap;margin-top:6px}
+.fm{width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:"JetBrains Mono",monospace}
+.note{background:#E4F0FA;border:1px solid #B9D8EE;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+input[type=text]{font:inherit;font-weight:700;border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:90px}
+input[type=number]{width:56px;font:inherit;font-weight:700;border:1px solid var(--line);border-radius:6px;padding:5px 6px}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.cols{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>A filesystem on a <span>blank disk</span></h1>
+  <p>A disk is just numbered blocks of bytes — it knows nothing of files or names. A filesystem is the bookkeeping that turns those blocks into named files you can grow, shrink and delete. Start with an empty disk and build it up, block by block.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar">
+      <input type="text" id="fname" value="notes.txt" aria-label="File name">
+      <span>size</span><input type="number" id="fsize" value="3" min="1" max="20"><span style="color:var(--soft)">blocks</span>
+      <button class="btn cyan" id="create">Create file</button>
+      <button class="btn" id="grow">Grow selected +1</button>
+      <button class="btn red" id="del">Delete selected</button>
+      <button class="btn" id="wipe">Format (empty disk)</button>
+    </div>
+  </section>
+  <div class="cols">
+    <section class="card"><h2>The disk: 40 numbered blocks</h2>
+      <div class="disk" id="disk"></div>
+      <div class="bar" style="font-size:12px;color:var(--soft);gap:12px;margin-top:8px" id="legend"></div>
+    </section>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <section class="card dir"><h2>Directory (block 0)</h2><div id="dirtable"></div></section>
+      <section class="card"><h2>Free-space map (block 1)</h2><div class="freemap" id="freemap"></div><div id="freesay" style="font-size:12px;color:var(--soft);margin-top:6px"></div></section>
+    </div>
+  </div>
+  <div id="say" style="font-size:15px;min-height:24px"></div>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), NB=40, RESERVED=2;
+const COLORS=['#E5197B','#12A66E','#E8620A','#7A4FE0','#0090C8','#E8A400'];
+let blocks=[], files=[], sel=null, seen={}, deletedTrace=null;
+function fmt(){ blocks=Array(NB).fill(null); files=[]; sel=null; deletedTrace=null; $('#say').innerHTML=''; render(); }
+function firstFree(n){ const out=[]; for(let i=RESERVED;i<NB&&out.length<n;i++) if(blocks[i]===null) out.push(i); return out.length===n?out:null; }
+function create(){
+  const name=$('#fname').value.trim()||'file'; const size=Math.max(1,+$('#fsize').value);
+  if(files.some(f=>f.name===name)){ say('A file with that name already exists in the directory.'); return; }
+  const spots=firstFree(size); if(!spots){ say('Not enough free blocks.'); return; }
+  const color=COLORS[files.length%COLORS.length]; const f={name,color,blocks:spots}; files.push(f); spots.forEach(b=>blocks[b]={f,fresh:true}); sel=f;
+  say(`Created <b>${name}</b>. The directory gained one line: the name, and the list of blocks it owns (${spots.join(', ')}). Those blocks are now marked used in the free-space map. The file’s bytes went into the data blocks; its <i>name</i> lives only in the directory.`);
+  find('create'); render(); setTimeout(()=>{ blocks.forEach(b=>b&&(b.fresh=false)); render(); },500);
+}
+function grow(){ if(!sel){ say('Select a file first (click one of its blocks).'); return; }
+  const spot=firstFree(1); if(!spot){ say('Disk full.'); return; }
+  sel.blocks.push(spot[0]); blocks[spot[0]]={f:sel,fresh:true};
+  say(`<b>${sel.name}</b> grew by one block. Notice the new block (${spot[0]}) need not sit next to the others — the directory just adds it to the file’s list. A file is wherever its block-list says it is, scattered or not.`);
+  find('grow'); render(); setTimeout(()=>{ blocks.forEach(b=>b&&(b.fresh=false)); render(); },500);
+}
+function del(){ if(!sel){ say('Select a file first.'); return; }
+  const f=sel; deletedTrace={name:f.name,blocks:f.blocks.slice()};
+  f.blocks.forEach(b=>{ blocks[b]=null; });  // free-space map now says free — but the bytes remain
+  files=files.filter(x=>x!==f); sel=null;
+  say(`Deleted <b>${f.name}</b>. Only two things changed: its line vanished from the directory, and its blocks are marked free again. <b>The bytes themselves were not erased.</b> They sit in those now-“free” blocks until something else overwrites them — which is exactly how deleted files are recovered, and why “empty the trash” does not mean “gone”.`);
+  find('delete'); render();
+}
+function render(){
+  $('#disk').innerHTML=[...Array(NB)].map((_,i)=>{
+    const b=blocks[i], reserved=i<RESERVED;
+    const cls=reserved?'dir':b?'':'free', bg=reserved?'':b?b.f.color:'';
+    const wasDel=deletedTrace&&deletedTrace.blocks.includes(i)&&!b;
+    return `<div class="blk ${b&&b.fresh?'new':''} ${reserved?'dir':(b?'':'free')}" data-b="${i}" style="${bg?`background:${bg};color:#fff;border-color:${bg}`:''}${b?';cursor:pointer':''}">
+      <small style="${bg?'color:#fff':''}">#${i}</small>${reserved?(i===0?'DIR':'FREE\\nMAP').replace('\\n','<br>'):b?b.f.name.slice(0,7):(wasDel?'<span style="color:#E23A3A;font-size:10px">old bytes</span>':'·')}</div>`;
+  }).join('');
+  $('#legend').innerHTML=`<span><span class="dot" style="background:#E4F0FA;display:inline-block"></span> reserved</span>`+files.map(f=>`<span><span class="dot" style="background:${f.color};display:inline-block"></span> ${f.name}${sel===f?' (selected)':''}</span>`).join('')+(deletedTrace?`<span style="color:#E23A3A">old bytes of a deleted file still on disk</span>`:'');
+  $('#dirtable').innerHTML=files.length?`<table><tr><td style="color:var(--soft)">name</td><td style="color:var(--soft)">blocks</td></tr>`+files.map(f=>`<tr style="background:${sel===f?'#FFF3D6':''}"><td>${f.name}</td><td>${f.blocks.join(', ')}</td></tr>`).join('')+'</table>':'<p style="color:var(--soft);font-size:13px">empty — no files yet</p>';
+  $('#freemap').innerHTML=[...Array(NB)].map((_,i)=>{ const used=i<RESERVED||blocks[i]; return `<div class="fm" style="background:${i<RESERVED?'#C9CDDA':used?'#1A1C2A':'#E4F6EE'};color:${used?'#fff':'#12A66E'}">${used?1:0}</div>`; }).join('');
+  const free=blocks.filter((b,i)=>i>=RESERVED&&b===null).length;
+  $('#freesay').textContent=`${free} of ${NB-RESERVED} data blocks free. Each square is one bit: 1 = used, 0 = free. To find room, the filesystem just scans for 0s.`;
+  renderQs();
+}
+function say(h){ $('#say').innerHTML=h; }
+$('#disk').addEventListener('click',e=>{ const d=e.target.closest('[data-b]'); if(!d) return; const b=blocks[+d.dataset.b]; if(b){ sel=b.f; say(`Selected <b>${sel.name}</b>: blocks ${sel.blocks.join(', ')}.`); render(); } });
+$('#create').onclick=create; $('#grow').onclick=grow; $('#del').onclick=del; $('#wipe').onclick=fmt;
+const FINDS=[
+ ['create','Create a file. What did the directory and free map gain?'],
+ ['grow','Select a file and grow it. Where did the new block go?'],
+ ['delete','Delete a file, then look carefully at its old blocks.'],
+ ['fragment','Create three files, delete the middle one, then create a bigger file.']];
+const TELL={
+ create:'A file is three things kept apart: a name and block-list in the directory, a used-mark in the free map, and the bytes in data blocks. The name is not attached to the data at all — it is a separate note pointing at it. Rename a file and not a single data byte moves.',
+ grow:'The new block did not have to be next to the old ones. A file is not a contiguous stretch of disk; it is whatever blocks its directory entry lists, in order. This is what lets files grow without shoving other files aside — the same freedom the linked list bought, applied to storage.',
+ delete:'Deleting frees the blocks in the map and removes the name from the directory, but leaves the bytes exactly where they were. The file is “gone” only in the sense that nothing points to it any more. Until those blocks are reused, the data is trivially recoverable — which is why securely erasing a disk means overwriting it, not just deleting.',
+ fragment:'The big new file had to be split across the gaps left by the deleted one, because no single run of free blocks was large enough. Its blocks are now scattered, and reading it means jumping around the disk. This is fragmentation, and on spinning disks it was a real slowdown — the reason old computers ran “defragmenters”.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+fmt(); renderQs();
+</script>

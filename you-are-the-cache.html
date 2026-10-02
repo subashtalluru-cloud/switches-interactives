@@ -1,0 +1,139 @@
+<meta charset="utf-8">
+<!-- You Are the Cache — Switches All the Way Down, Chapter 26 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--cyan)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.pink{background:var(--pink);color:#fff;border-color:var(--pink)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.slots{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
+.slot{border:2px solid var(--line);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:transform .1s,background .1s;min-height:88px;display:flex;flex-direction:column;justify-content:center}
+.slot:hover{border-color:var(--cyan)}
+.slot.empty{color:var(--soft);cursor:default;border-style:dashed}
+.slot .a{font-family:"JetBrains Mono",monospace;font-size:26px;font-weight:700}
+.slot .m{font-size:12px;color:var(--soft)}
+.slot.evict{background:#FDE7E7;border-color:var(--red)}
+.slot.hit{background:#E4F6EE;border-color:var(--green)}
+.req{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.rq{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-weight:700;background:#fff;border:1px solid var(--line)}
+.rq.now{border-color:var(--sun);border-width:3px;background:#FFF7E0}
+.rq.hit{background:#E4F6EE;border-color:var(--green)} .rq.miss{background:#FDE7E7;border-color:var(--red)}
+.big{font-size:19px;font-weight:800;margin:6px 0}
+.score{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.sc{background:var(--bg);border-radius:10px;padding:8px 10px}
+.sc b{display:block;font-size:24px;font-family:"JetBrains Mono",monospace}
+.sc small{color:var(--soft);font-size:12px}
+.note{background:#E4F6EE;border:1px solid #B7E4CE;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+.bars{display:flex;gap:18px;align-items:flex-end;height:150px}
+.barcol{flex:1;text-align:center;display:flex;flex-direction:column;justify-content:flex-end;gap:4px}
+.barcol .bx{border-radius:6px 6px 0 0;min-height:3px}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>You are the <span>cache</span></h1>
+  <p>A cache is a small, fast memory that keeps a few things close, betting they will be needed again. It has room for four. Requests come in; when a new one arrives and the cache is full, <b>you</b> decide what to throw out. Then see how the machine’s own rules would have done.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar"><span style="color:var(--soft)">Access pattern:</span><span id="patterns"></span></div>
+    <div class="big" id="prompt">Press “Deal a pattern”.</div>
+    <div class="req" id="reqs"></div>
+    <div class="slots" id="slots"></div>
+    <div class="bar"><button class="btn pink" id="deal">Deal a pattern</button><span id="hint" style="color:var(--soft);font-size:14px"></span></div>
+  </section>
+  <div class="score" id="score"></div>
+  <section class="card">
+    <h2>Your choices vs. the standard policies</h2>
+    <div class="bars" id="bars"></div>
+    <p style="font-size:13px;color:var(--soft);margin:8px 0 0">Hit rate on the same request stream. LRU throws out the least recently used; FIFO the oldest; Random a random one; Belady is the impossible ideal that can see the future.</p>
+  </section>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), SIZE=4;
+const PATTERNS={
+ 'A repeating loop':()=>{ const seq=[]; for(let r=0;r<5;r++) for(const a of [1,2,3,4,5]) seq.push(a); return seq; },   // 5 items, 4 slots: the classic thrash
+ 'One hot item':()=>{ const s=[]; for(let i=0;i<25;i++) s.push(Math.random()<0.6?7:1+(Math.random()*9|0)); return s; },
+ 'A long scan':()=>{ const s=[]; for(let i=1;i<=25;i++) s.push(i); return s; },
+ 'Random':()=>[...Array(25)].map(()=>1+(Math.random()*8|0)),
+ 'Working set of 3':()=>{ const s=[]; for(let i=0;i<25;i++) s.push([2,5,9][Math.random()*3|0]); if(Math.random()<0.15) s[12]=99; return s; }};
+let patName='A repeating loop', seq=[], i=0, slots=[], lru=[], phase='idle', youHits=0, youN=0, seen={}, dealt=false;
+$('#patterns').innerHTML=Object.keys(PATTERNS).map(k=>`<button class="btn ${k===patName?'on':''}" data-p="${k}">${k}</button>`).join('');
+$('#patterns').onclick=e=>{ const b=e.target.closest('[data-p]'); if(b){ patName=b.dataset.p; document.querySelectorAll('[data-p]').forEach(x=>x.classList.toggle('on',x===b)); deal(); } };
+function deal(){ seq=PATTERNS[patName](); i=0; slots=[]; lru=[]; youHits=0; youN=0; phase='idle'; dealt=true; step(); }
+function step(){
+  if(i>=seq.length){ phase='done'; render(); scoreboard(); return; }
+  const a=seq[i]; const idx=slots.findIndex(s=>s.a===a);
+  if(idx>=0){ youHits++; youN++; touch(a); slots[idx].flash='hit'; setTimeout(()=>{ slots[idx].flash=null; i++; step(); },420); render(); return; }
+  // miss
+  youN++;
+  if(slots.length<SIZE){ slots.push({a}); touch(a); i++; setTimeout(step,300); render(); return; }
+  phase='evict'; render();   // wait for the reader to pick a slot to throw out
+}
+function touch(a){ lru=lru.filter(x=>x!==a); lru.push(a); }
+function evict(k){ if(phase!=='evict') return; const a=seq[i]; slots[k]={a,flash:'evict'}; touch(a); phase='idle';
+  setTimeout(()=>{ slots[k].flash=null; i++; step(); },420); render();
+  if(patName==='A repeating loop') check('loop'); }
+function render(){
+  const a=seq[i];
+  $('#prompt').innerHTML=phase==='done'?`Stream finished. Your hit rate: <b>${pct(youHits,youN)}</b>.`:phase==='evict'?`Address <b style="color:var(--pink)">${a}</b> is needed and the cache is full. <b>Click a slot to evict.</b>`:dealt?`Reading address <b style="color:var(--cyan)">${a}</b>…`:'Press “Deal a pattern”.';
+  $('#reqs').innerHTML=seq.map((x,j)=>`<div class="rq ${j===i&&phase!=='done'?'now':''}">${x}</div>`).join('');
+  $('#slots').innerHTML=[...Array(SIZE)].map((_,k)=>{ const s=slots[k]; if(!s) return `<div class="slot empty">empty</div>`;
+    const age=lru.indexOf(s.a); return `<div class="slot ${s.flash||''} ${phase==='evict'?'':''}" data-k="${k}"><div class="a">${s.a}</div><div class="m">${phase==='evict'?'used '+(lru.length-age)+' ago':'in cache'}</div></div>`; }).join('');
+  $('#hint').textContent=phase==='evict'?'Tip: the slot used longest ago is usually the safest to drop — but not always.':'';
+  $('#score').innerHTML=`<div class="sc"><small>You: hits</small><b style="color:var(--green)">${youHits}</b><small>of ${youN}</small></div><div class="sc"><small>Your hit rate</small><b>${pct(youHits,youN)}</b></div>`;
+  renderQs();
+}
+$('#slots').addEventListener('click',e=>{ const s=e.target.closest('[data-k]'); if(s) evict(+s.dataset.k); });
+$('#deal').onclick=deal;
+const pct=(h,n)=>n?Math.round(h/n*100)+'%':'—';
+// Run the fixed policies over the same sequence.
+function runPolicy(pol){
+  let cache=[], use=[], hits=0, order=[];
+  seq.forEach((a,idx)=>{ const at=cache.indexOf(a); if(at>=0){ hits++; use[at]=idx; return; }
+    if(cache.length<SIZE){ cache.push(a); use.push(idx); order.push(idx); return; }
+    let victim;
+    if(pol==='lru') victim=use.indexOf(Math.min(...use));
+    else if(pol==='fifo') victim=order.indexOf(Math.min(...order));
+    else if(pol==='rand') victim=Math.random()*SIZE|0;
+    else if(pol==='belady'){ // evict the one whose next use is farthest away
+      victim=0; let far=-1; cache.forEach((c,ci)=>{ let nxt=seq.slice(idx+1).indexOf(c); if(nxt<0) nxt=1e9; if(nxt>far){ far=nxt; victim=ci; } }); }
+    cache[victim]=a; use[victim]=idx; order[victim]=idx;
+  });
+  return hits/seq.length;
+}
+function scoreboard(){
+  const pols=[['You',youHits/youN,'var(--pink)'],['LRU',runPolicy('lru'),'var(--cyan)'],['FIFO',runPolicy('fifo'),'var(--sun)'],['Random',runPolicy('rand'),'var(--violet)'],['Belady',runPolicy('belady'),'var(--green)']];
+  $('#bars').innerHTML=pols.map(([n,v,c])=>`<div class="barcol"><div style="font-family:JetBrains Mono,monospace;font-weight:700">${Math.round(v*100)}%</div><div class="bx" style="height:${v*120}px;background:${c}"></div><div style="font-size:13px;color:var(--soft)">${n}</div></div>`).join('');
+  const lru=runPolicy('lru'), bel=runPolicy('belady');
+  if(patName==='A repeating loop'&&lru<0.25) check('thrash');
+  if(bel>lru) check('belady');
+  if(youHits/youN>=lru) check('beat');
+}
+function check(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+const FINDS=[
+ ['loop','Play “a repeating loop” and evict by hand. Can you get a good hit rate?'],
+ ['thrash','Look at how LRU does on the repeating loop of five items.'],
+ ['belady','Find a pattern where the future-seeing policy (Belady) beats LRU.'],
+ ['beat','Match or beat LRU on any pattern.']];
+const TELL={
+ loop:'Five items cycling through four slots is the cache’s nightmare. Whatever you throw out is exactly what you need next, because you need all five and can only keep four. This is thrashing.',
+ thrash:'LRU scores near zero here, and it is not being stupid: it throws out the least recently used item, which in a strict loop is precisely the one about to be used again. A cache one slot too small for the loop can be worse than useless. Making it slightly bigger fixes it completely — a cliff, not a slope.',
+ belady:'Belady’s policy evicts whatever will not be needed for the longest time, which needs a look at the future no real cache has. It sets the ceiling that every real policy is measured against. LRU’s bet is simply that the recent past predicts the near future — usually true, which is why LRU is everywhere, and why it fails exactly when that bet is wrong.',
+ beat:'A human who can see the whole stream can match or beat LRU, because you can act a little like Belady. A real cache decides in a nanosecond with no view of the future, so it falls back on a cheap, usually-right rule. The whole memory hierarchy is built of bets like this one.'};
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+renderQs();
+</script>

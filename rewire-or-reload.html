@@ -1,0 +1,195 @@
+<meta charset="utf-8">
+<!-- E5 · Rewire or Reload — Switches All the Way Down, Chapter 6 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1200px;margin:0 auto;padding:18px;display:flex;flex-direction:column;gap:12px}
+h1{font-size:34px;margin:0;font-weight:800} h1 .a{color:var(--pink)} h1 .b{color:var(--cyan)}
+header p{margin:4px 0 0;color:var(--soft);max-width:78ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:700}
+.panel{background:var(--night2);border-radius:10px;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:600;font-size:14px;border:none;border-radius:6px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.pink{background:var(--pink);color:#fff}.btn.cyan{background:var(--cyan)}.btn.sun{background:var(--sun)}.btn.green{background:var(--green)}
+.btn.cur{outline:3px solid var(--sun)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+svg#board{width:100%;height:auto;background:#241B5C;border-radius:10px;touch-action:none;user-select:none}
+.clock{font-family:"JetBrains Mono",monospace;font-size:30px;font-weight:700;color:var(--sun)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.stats div{background:var(--night2);border-radius:8px;padding:8px 10px}
+.stats b{display:block;font-size:24px;font-family:"JetBrains Mono",monospace;color:var(--sun)}
+.stats small{color:var(--soft);font-size:12px}
+.mem{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cell{background:#fff;color:var(--ink);border-radius:8px;padding:8px}
+.cell.now{outline:4px solid var(--pink)}
+.cell small{color:#6a63a8;font-size:11px;display:block;font-weight:700}
+.cell select{font:inherit;font-weight:700;width:100%;border:1px solid #cfc8ff;border-radius:4px;padding:3px;margin-top:3px}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:12px;font-size:15px}
+.warn{background:var(--orange);color:#fff;border-radius:8px;padding:10px;font-size:14px}
+.task{background:var(--night3);border-radius:10px;padding:12px 14px;border-left:5px solid var(--sun)}
+.out{font-family:"JetBrains Mono",monospace;font-size:26px;font-weight:700}
+</style>
+<div class="wrap">
+<header>
+  <h1><span class="a">Rewire</span> or <span class="b">reload</span></h1>
+  <p>ENIAC was programmed by plugging cables between its units: the wiring was the program. Its successors kept the program as numbers in memory. Make the same change to both machines and time yourself.</p>
+</header>
+<div class="bar" id="tabs"></div>
+<div class="task" id="task"></div>
+
+<section id="plug">
+  <div class="bar" style="justify-content:space-between;margin-bottom:8px">
+    <div class="bar"><button class="btn pink" id="prun">Send the start pulse</button><button class="btn" id="preset">Put the cables back as they were</button></div>
+    <div class="bar"><span style="color:var(--soft)">Your time</span><span class="clock" id="pclock">0:00</span></div>
+  </div>
+  <svg id="board" viewBox="0 0 1000 470" aria-label="Plugboard"></svg>
+  <p style="color:var(--soft);font-size:13px;margin:6px 0 0">Click a jack, then another jack, to plug in a cable. Click a cable to pull it out. <span style="color:var(--pink);font-weight:700">Pink</span> cables carry the program pulse: which unit acts next. <span style="color:var(--cyan);font-weight:700">Blue</span> cables carry numbers.</p>
+</section>
+
+<section id="stored" style="display:none">
+  <div class="bar" style="justify-content:space-between;margin-bottom:8px">
+    <div class="bar"><button class="btn cyan" id="srun">Run</button></div>
+    <div class="bar"><span style="color:var(--soft)">Your time</span><span class="clock" id="sclock">0:00</span></div>
+  </div>
+  <div class="panel"><h2>Memory: the program is just these numbers</h2><div class="mem" id="mem"></div>
+    <div class="bar" style="margin-top:10px"><span>Output:</span><span class="out" id="sout">—</span><span style="color:var(--soft)">a = 3, b = 4, c = 5</span></div></div>
+</section>
+
+<section id="summary" style="display:none"></section>
+<div class="stats" id="stats"></div>
+<div id="msg"></div>
+</div>
+<script>
+const $=s=>document.querySelector(s), V={a:3,b:4,c:5};
+// ---------- The plugboard ----------
+const UNITS=[
+  {id:'start',name:'Start',x:40,y:40,w:120,h:60,pin:false,pout:true,din:0,dout:false},
+  {id:'a',name:'Constant a = 3',x:40,y:180,w:150,h:56,pin:false,pout:false,din:0,dout:true},
+  {id:'b',name:'Constant b = 4',x:40,y:270,w:150,h:56,pin:false,pout:false,din:0,dout:true},
+  {id:'c',name:'Constant c = 5',x:40,y:360,w:150,h:56,pin:false,pout:false,din:0,dout:true},
+  {id:'add',name:'Adder',x:330,y:150,w:150,h:110,pin:true,pout:true,din:2,dout:true},
+  {id:'mul',name:'Multiplier',x:330,y:320,w:150,h:110,pin:true,pout:true,din:2,dout:true},
+  {id:'print',name:'Printer',x:700,y:200,w:180,h:120,pin:true,pout:false,din:1,dout:false}];
+const ORIGINAL=[['start.po','add.pi'],['add.po','print.pi'],['a.do','add.d0'],['b.do','add.d1'],['add.do','print.d0']];
+let cables=ORIGINAL.map(c=>c.slice()), pending=null, printed=null, moves=0, pulse=null;
+const U=id=>UNITS.find(u=>u.id===id);
+function jackPos(j){ const [id,k]=j.split('.'), u=U(id);
+  if(k==='pi') return {x:u.x+22,y:u.y}; if(k==='po') return {x:u.x+u.w-22,y:u.y};
+  if(k==='do') return {x:u.x+u.w,y:u.y+u.h/2+10};
+  const i=+k.slice(1); return {x:u.x,y:u.y+u.h*(i+1)/(u.din+1)+10}; }
+const kind=j=>j.endsWith('.pi')||j.endsWith('.po')?'p':'d';
+const isOut=j=>j.endsWith('.po')||j.endsWith('.do');
+function sag(a,b){ const mx=(a.x+b.x)/2, my=Math.max(a.y,b.y)+40+Math.abs(a.x-b.x)*0.12; return `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}`; }
+function drawBoard(){
+  let h='<defs><filter id="g"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+  // Draw order matters: unit bodies, then cables, then jacks on top so a jack is always clickable.
+  UNITS.forEach(u=>{
+    h+=`<rect x="${u.x}" y="${u.y}" width="${u.w}" height="${u.h}" rx="8" fill="#3A2E8A" stroke="#6b5fd0" stroke-width="2"/><text x="${u.x+u.w/2}" y="${u.y+u.h/2+(u.id==='print'?-6:4)}" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">${u.name}</text>`;
+    if(u.id==='print') h+=`<text x="${u.x+u.w/2}" y="${u.y+u.h/2+26}" text-anchor="middle" font-size="26" font-weight="700" font-family="JetBrains Mono,monospace" fill="#FFC700">${printed==null?'—':printed}</text>`;
+  });
+  cables.forEach((c,i)=>{ const a=jackPos(c[0]), b=jackPos(c[1]), col=kind(c[0])==='p'?'#FF2E88':'#00C2FF';
+    h+=`<path d="${sag(a,b)}" stroke="transparent" stroke-width="16" fill="none" data-c="${i}" style="cursor:pointer"/><path d="${sag(a,b)}" stroke="${col}" stroke-width="5" fill="none" stroke-linecap="round" pointer-events="none"/>`; });
+  UNITS.forEach(u=>{
+    const jacks=[]; if(u.pin) jacks.push('pi'); if(u.pout) jacks.push('po'); if(u.dout) jacks.push('do'); for(let i=0;i<u.din;i++) jacks.push('d'+i);
+    jacks.forEach(k=>{ const j=u.id+'.'+k, p=jackPos(j), pk=kind(j)==='p', sel=pending===j;
+      h+=`<circle cx="${p.x}" cy="${p.y}" r="${sel?11:9}" fill="${sel?'#FFC700':'#14123A'}" stroke="${pk?'#FF2E88':'#00C2FF'}" stroke-width="4" data-j="${j}" style="cursor:crosshair"/>`;
+      const lab={pi:'go in',po:'go out',do:'number out',d0:'in 1',d1:'in 2'}[k];
+      h+=`<text x="${p.x+(k==='do'?14:k[0]==='d'?-14:0)}" y="${p.y+(k[0]==='p'?-14:4)}" text-anchor="${k==='do'?'start':k[0]==='d'?'end':'middle'}" font-size="10" fill="#C9C4F2" pointer-events="none">${u.id==='print'&&k==='d0'?'in':lab}</text>`; });
+  });
+  if(pulse) h+=`<circle cx="${pulse.x}" cy="${pulse.y}" r="10" fill="#FFC700" filter="url(#g)"/>`;
+  $('#board').innerHTML=h;
+}
+// Follow the pink cables from Start; each unit that receives the pulse acts, using whatever arrives on its blue cables.
+function evaluate(){
+  const val={a:V.a,b:V.b,c:V.c}, path=[], log=[]; let at='start', out=null;
+  for(let n=0;n<10;n++){
+    const next=cables.find(c=>c[0]===at+'.po'); if(!next) break;
+    const u=next[1].split('.')[0]; path.push(next);
+    const inp=i=>{ const c=cables.find(c=>c[1]===u+'.d'+i); if(!c) return undefined; return val[c[0].split('.')[0]]; };
+    if(u==='add'||u==='mul'){ const x=inp(0), y=inp(1); if(x==null||y==null){ log.push(`The ${U(u).name.toLowerCase()} got the pulse but a number input was empty.`); val[u]=undefined; } else val[u]=u==='add'?x+y:x*y; }
+    if(u==='print'){ out=inp(0); if(out==null) log.push('The printer got the pulse but no number arrived.'); break; }
+    at=u;
+  }
+  return {out,path,log};
+}
+async function runPlug(){
+  const r=evaluate(); printed=null;
+  for(const c of r.path){ const a=jackPos(c[0]), b=jackPos(c[1]);
+    for(let t=0;t<=1;t+=0.08){ const mx=(a.x+b.x)/2, my=Math.max(a.y,b.y)+40+Math.abs(a.x-b.x)*0.12;
+      pulse={x:(1-t)*(1-t)*a.x+2*(1-t)*t*mx+t*t*b.x,y:(1-t)*(1-t)*a.y+2*(1-t)*t*my+t*t*b.y}; drawBoard(); await new Promise(r=>setTimeout(r,22)); } }
+  pulse=null; printed=r.out==null?'nothing':r.out; drawBoard();
+  if(r.log.length) msg(`<div class="warn">${r.log.join(' ')}</div>`);
+  check(r.out);
+}
+$('#board').addEventListener('pointerdown',e=>{
+  const j=e.target.closest('[data-j]'), c=e.target.closest('[data-c]');
+  if(j){ const id=j.dataset.j; startClock();
+    if(!pending) pending=id;
+    else if(pending===id) pending=null;
+    else { const a=pending, b=id;
+      if(kind(a)!==kind(b)) msg('<div class="warn">A pink program jack can only connect to another pink jack, and blue to blue.</div>');
+      else if(isOut(a)===isOut(b)) msg('<div class="warn">Connect an output to an input.</div>');
+      else { const [o,i]=isOut(a)?[a,b]:[b,a]; cables=cables.filter(c=>c[1]!==i&&!(kind(o)==='p'&&c[0]===o)); cables.push([o,i]); moves++; msg(''); }
+      pending=null; }
+  } else if(c){ cables.splice(+c.dataset.c,1); moves++; startClock(); }
+  else pending=null;
+  drawBoard(); stats();
+});
+$('#prun').onclick=runPlug;
+$('#preset').onclick=()=>{ cables=ORIGINAL.map(c=>c.slice()); printed=null; drawBoard(); };
+
+// ---------- The stored-program machine ----------
+const OPS=['NOP','LOAD a','LOAD b','LOAD c','ADD a','ADD b','ADD c','MUL a','MUL b','MUL c','OUT','HALT'];
+const MEM0=['LOAD a','ADD b','NOP','OUT','HALT','NOP','NOP','NOP'];
+let mem=MEM0.slice(), edits=0, spc=-1;
+function drawMem(){ $('#mem').innerHTML=mem.map((v,i)=>`<div class="cell ${spc===i?'now':''}"><small>cell ${i} · holds ${OPS.indexOf(v)}</small><select data-m="${i}" aria-label="memory cell ${i}">${OPS.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select></div>`).join(''); }
+async function runStored(){
+  let acc=0, out=null;
+  for(spc=0;spc<mem.length;spc++){ drawMem(); await new Promise(r=>setTimeout(r,260));
+    const [op,x]=mem[spc].split(' '); if(op==='HALT') break;
+    if(op==='LOAD') acc=V[x]; if(op==='ADD') acc+=V[x]; if(op==='MUL') acc*=V[x]; if(op==='OUT') { out=acc; $('#sout').textContent=out; } }
+  spc=-1; drawMem(); check(out);
+}
+$('#mem').addEventListener('change',e=>{ mem[+e.target.dataset.m]=e.target.value; edits++; startClock(); stats(); });
+$('#srun').onclick=runStored;
+
+// ---------- Tasks, clocks, comparison ----------
+const TASKS=[
+  {id:'plug',t:'1. Rewire',say:'The plugboard is wired to print <b>a + b</b> = 7. Change it to print <b>(a + b) × c</b> = 35. The clock starts when you touch the first jack.',want:35},
+  {id:'stored',t:'2. Reload',say:'The same machine, stored-program style: the instructions are numbers in memory cells. It prints <b>a + b</b>. Make it print <b>(a + b) × c</b>. The clock starts at your first change.',want:35},
+  {id:'summary',t:'3. Compare'}];
+let T=0, clocks=[{t0:null,t:0,done:false},{t0:null,t:0,done:false}];
+function startClock(){ const c=clocks[T]; if(c&&!c.done&&c.t0==null) c.t0=Date.now(); }
+setInterval(()=>{ clocks.forEach((c,i)=>{ if(c.t0!=null&&!c.done) c.t=(Date.now()-c.t0)/1000; }); $('#pclock').textContent=fmt(clocks[0].t); $('#sclock').textContent=fmt(clocks[1].t); },250);
+const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+function check(out){
+  const tk=TASKS[T]; if(!tk.want) return;
+  if(out===tk.want&&!clocks[T].done){ clocks[T].done=true; if(clocks[T].t0==null) clocks[T].t=0;
+    msg(`<div class="note">${T===0?`Printed 35. It took you ${fmt(clocks[0].t)} and ${moves} cable moves, on a board with seven units. The real ENIAC had forty panels and thousands of cables and switches; setting up a new problem took its programmers days, and checking the wiring was a job in itself. <b>Now try the other machine.</b>`:`Printed 35 after ${edits} change${edits===1?'':'s'} to memory, in ${fmt(clocks[1].t)}. You did not touch the machine at all. You changed a number.`}</div>`);
+    tabs(); }
+  else if(out!=null&&out!==tk.want) msg(`<div class="warn">Printed ${out}. The target is ${tk.want}.</div>`);
+}
+function msg(h){ $('#msg').innerHTML=h; }
+function stats(){ $('#stats').innerHTML=`<div><small>Cable moves on the plugboard</small><b>${moves}</b><small>${clocks[0].done?'done in '+fmt(clocks[0].t):''}</small></div><div><small>Changes to memory</small><b>${edits}</b><small>${clocks[1].done?'done in '+fmt(clocks[1].t):''}</small></div>`; }
+function tabs(){ $('#tabs').innerHTML=TASKS.map((t,i)=>`<button class="btn ${i===T?'cur':''}" data-t="${i}" ${i===2&&!(clocks[0].done&&clocks[1].done)?'disabled':''} ${i===1&&!clocks[0].done?'disabled':''}>${t.t}${clocks[i]&&clocks[i].done?' ✓':''}</button>`).join(''); }
+$('#tabs').onclick=e=>{ const b=e.target.closest('[data-t]'); if(!b||b.disabled) return; T=+b.dataset.t; show(); };
+function show(){
+  ['plug','stored','summary'].forEach((id,i)=>$('#'+id).style.display=i===T?'':'none');
+  $('#task').innerHTML=TASKS[T].say||'Both machines now print 35. Here is what each change cost.';
+  if(T===2) summary(); msg(''); tabs();
+}
+function summary(){
+  const a=clocks[0].t, b=Math.max(clocks[1].t,0.5), m=Math.max(a,b);
+  $('#summary').innerHTML=`<div class="panel"><h2>The same change, two ways</h2>
+   <svg viewBox="0 0 900 150" style="width:100%;height:auto">
+    <text x="0" y="40" font-size="15" font-weight="700" fill="#fff">Rewire</text><rect x="110" y="20" width="${Math.max(6,a/m*520)}" height="34" rx="6" fill="#FF2E88"/><text x="${120+Math.max(6,a/m*520)}" y="43" font-size="15" fill="#fff">${fmt(a)} · ${moves} cables</text>
+    <text x="0" y="110" font-size="15" font-weight="700" fill="#fff">Reload</text><rect x="110" y="90" width="${Math.max(6,b/m*520)}" height="34" rx="6" fill="#00C2FF"/><text x="${120+Math.max(6,b/m*520)}" y="113" font-size="15" fill="#fff">${fmt(clocks[1].t)} · ${edits} change${edits===1?'':'s'}</text></svg></div>
+  <div class="note" style="margin-top:10px"><b>Why this changed everything.</b> On the plugboard the program was the machine’s physical shape, so changing the program meant changing the machine. In the stored-program machine the program is numbers in the same memory as the data, so changing it is just writing numbers. And anything that can write numbers can write a program: another program can load it from tape, a compiler can produce it, a network can deliver it. Every app you have ever installed arrived this way. The price is the one Chapter 5 warned about: if instructions are only numbers, a machine can be tricked into running numbers it was never meant to run.</div>
+  <div class="bar" style="margin-top:10px"><button class="btn sun" id="again">Try another change: a × b + c</button></div>`;
+  $('#again').onclick=()=>{ TASKS[0].want=TASKS[1].want=V.a*V.b+V.c; TASKS[0].say='Make the plugboard print <b>a × b + c</b> = 17. Notice how much of your previous wiring you have to undo.'; TASKS[1].say='Make memory print <b>a × b + c</b> = 17.'; clocks=[{t0:null,t:0,done:false},{t0:null,t:0,done:false}]; moves=0; edits=0; T=0; show(); stats(); };
+}
+drawBoard(); drawMem(); stats(); show();
+</script>

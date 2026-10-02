@@ -1,0 +1,165 @@
+<meta charset="utf-8">
+<!-- E1 · The Four Hundred Millisecond Map — Switches All the Way Down, Chapter 1 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#E9ECE6;--panel:#F6F7F3;--ink:#1F2A36;--muted:#5E6A72;--wire:#8E979C;--live:#F2A900;--chip:#25272C;--line:#CBD1CA;--bad:#B5462F;--good:#3C7A4E}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+h1{font-size:30px;margin:0}
+header p{margin:4px 0 0;color:var(--muted);max-width:75ch}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.btn{font:inherit;font-size:14px;border:1px solid var(--ink);background:#fff;color:var(--ink);border-radius:4px;padding:6px 11px;cursor:pointer}
+.btn.dark{background:var(--ink);color:#fff}
+.btn:focus-visible{outline:3px solid var(--live);outline-offset:2px}
+svg#tl{width:100%;height:auto;background:#FBFCF9;border:1px solid var(--line);border-radius:6px;touch-action:none;user-select:none;cursor:grab}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.read div{background:#fff;border:1px solid var(--line);border-radius:5px;padding:8px 10px}
+.read b{display:block;font-size:22px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--muted);font-size:12px}
+.detail{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--live);border-radius:5px;padding:10px 12px;min-height:64px}
+.detail h2{font-size:16px;margin:0 0 4px}
+.tour{background:#fff;border:1px solid var(--line);border-radius:5px;padding:10px 12px}
+input[type=range]{width:260px}
+</style>
+<div class="wrap">
+<header>
+  <h1>Four hundred milliseconds</h1>
+  <p>One tap on a photograph, laid out in time. Every bar is something the phone did. Scroll or pinch to zoom into any moment; drag to move along. The whole tap is 400 thousandths of a second. The smallest things here take a third of a billionth.</p>
+</header>
+<div class="bar" id="tourbar"></div>
+<div class="tour" id="tourtext"></div>
+<svg id="tl" viewBox="0 0 1000 470" aria-label="Timeline of one tap"></svg>
+<div class="bar">
+  <label style="font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center">Zoom <input type="range" id="zoom" min="0" max="1000" value="0"></label>
+  <button class="btn" id="whole">Show the whole tap</button>
+  <button class="btn" id="cloud">What if the photo lived in the cloud?</button>
+</div>
+<div class="read" id="read"></div>
+<div class="detail" id="detail"><h2>Click any bar</h2>for what it is and where the book explains it.</div>
+</div>
+<script>
+// Timings are illustrative but realistic for a current phone; the book gives the same round figures.
+// Units: milliseconds throughout. 1 ns = 1e-6 ms.
+const LANES=['Touch sensor','Processor: kernel','Processor: programs','Storage','Image decoder','Graphics and display','Network'];
+const NS=1e-6, US=1e-3;
+const BASE=[
+  {lane:0,s:0,d:2.2,label:'Finger arrives; scanning the grid',ch:'Chapter 1',text:'The touch chip sweeps its grid of electrodes hundreds of times a second, measuring capacitance at every crossing. For most of its life the answer is “nothing here”.'},
+  {lane:0,s:2.2,d:0.5,label:'Find the centre of the blob',ch:'Chapter 1',text:'Several crossings report a change at once. The chip averages them into one point, more precise than any single reading, and decides it is a fingertip and not a sleeve.'},
+  {lane:1,s:2.8,d:0.0445,label:'Interrupt',ch:'Chapter 24',text:'The touch chip raises a line the processor must notice. The processor stops what it was doing, saves where it was, and jumps to a handler. The handler is brief on purpose.',kids:[
+    {lane:1,s:2.8,d:150*NS,label:'Save registers',ch:'Chapter 24',text:'The processor writes down exactly where it was, so the interrupted program never knows it was paused.'},
+    {lane:1,s:2.8+150*NS,d:40*US,label:'Read the coordinates over the chip bus',ch:'Chapter 24',text:'The handler asks the touch chip for its numbers. A slow serial bus: tens of microseconds, an age for the processor.'},
+    {lane:1,s:2.8+41*US,d:2*US,label:'Queue the event',ch:'Chapter 38',text:'Leave the touch in a queue for something less urgent, and get out.'},
+    {lane:1,s:2.8+44*US,d:200*NS,label:'Return',ch:'Chapter 24',text:'Restore the saved registers; the interrupted program carries on exactly where it stopped.'}]},
+  {lane:2,s:0,d:2.8,label:'Decoding audio (unrelated)',ch:'Chapter 37',text:'Whatever the processor happened to be doing. The tap will interrupt it and it will never notice.'},
+  {lane:2,s:3.0,d:0.004,label:'Switch programs',ch:'Chapter 37',text:'The scheduler saves one program’s state and loads another’s: a context switch, a few microseconds.'},
+  {lane:2,s:3.1,d:0.8,label:'Window server routes the touch',ch:'Chapter 37',text:'Which program owns this rectangle of glass? A dedicated program keeps track and hands the touch to the photo app.'},
+  {lane:2,s:4.0,d:1.6,label:'Photo app decides to open the image',ch:'Chapter 18',text:'The app checks which thumbnail is under the finger. A few million instructions.',kids:[
+    {lane:2,s:4.2,d:0.3*US,label:'One function call',ch:'Chapter 20',text:'Push a return address, jump, do the work, pop, return.'},
+    {lane:2,s:4.2+0.3*US,d:80*NS,label:'Wait for main memory',ch:'Chapter 26',text:'The data was not in the cache. Fetching it from DRAM takes around 80 nanoseconds, time in which the processor could have run hundreds of instructions.'},
+    {lane:2,s:4.2+0.38*US,d:1*NS,label:'Cache hit',ch:'Chapter 26',text:'The next value was in the level-1 cache: about a nanosecond.'},
+    {lane:2,s:4.2+0.381*US,d:0.33*NS,label:'One instruction',short:'1 instr.',ch:'Chapter 18',text:'Fetch, decode, execute: one tick of a 3 GHz clock. Modern processors overlap several of these at once.'}]},
+  {lane:1,s:5.6,d:0.5,label:'Filesystem: name to blocks',ch:'Chapter 39',text:'The app knows a name and a folder. The filesystem translates those fictions into numbered blocks on the storage chip.'},
+  {lane:3,s:6.1,d:14,label:'Flash storage read',ch:'Chapter 28',text:'A controller inside the storage chip, a small computer itself, fetches the blocks, quietly remapping them to spread wear. Ten or twenty milliseconds.',kids:[
+    {lane:3,s:6.1,d:40*US,label:'Controller maps the block',ch:'Chapter 28',text:'The block number the phone asked for is not where the data physically is. The controller keeps the real map.'},
+    {lane:3,s:6.2,d:60*US,label:'Read one flash page',ch:'Chapter 28',text:'Sensing the charge stored in millions of flash cells.'}]},
+  {lane:2,s:6.2,d:13.8,label:'Other programs run while we wait',ch:'Chapter 37',text:'Waiting 14 ms would waste tens of millions of instructions, so the scheduler runs something else. The wait is invisible because it has been filled.'},
+  {lane:4,s:21,d:95,label:'Decode the compressed image',ch:'Chapter 10',text:'Three million bytes of compressed data become twelve million pixels, on a separate chip built only for this job.'},
+  {lane:5,s:118,d:22,label:'Scale 12 million pixels to the screen',ch:'Chapter 45',text:'Averaging and blending, done by thousands of small identical units working in parallel.'},
+  {lane:5,s:150,d:200,label:'Grow-open animation',ch:'Chapter 45',text:'A fifth of a second of motion: 24 separate frames at 120 per second, each composed and delivered on its deadline.',frames:true},
+  {lane:5,s:350,d:50,label:'Final image on screen',ch:'Chapter 1',text:'The display hardware reads the frame from memory, line by line, turning numbers into voltages into light.'}
+];
+const CLOUD=[
+  {lane:6,s:6,d:4,label:'Look up the server’s address',ch:'Chapter 42',text:'A distributed naming system turns a name into a number. Usually answered from a nearby cache in a few milliseconds.'},
+  {lane:6,s:10,d:90,label:'Open a connection (one round trip)',ch:'Chapter 41',text:'Across a radio mast, fibre and an undersea cable, perhaps 8,000 km. Light in glass needs about 80 ms there and back.'},
+  {lane:6,s:100,d:90,label:'Agree a secret key in public',ch:'Chapter 41',text:'Encryption set-up: another round trip.'},
+  {lane:6,s:190,d:140,label:'Receive the photo in packets',ch:'Chapter 40',text:'Thousands of packets, routed independently through 15 to 30 machines; any lost ones noticed and resent.'}
+];
+let cloud=false, view={a:-5,b:410}, sel=null, domainEnd=410;
+const svg=document.getElementById('tl'), X0=190, W=790;
+function events(){
+  if(!cloud) return BASE;
+  // With the photo remote, local storage is replaced by the network and everything after shifts.
+  const shift=330-6; return [...BASE.filter(e=>e.lane!==3&&!e.label.startsWith('Other programs')).map(e=>e.s>20?{...e,s:e.s+shift}:e),...CLOUD,
+    {lane:2,s:10,d:320,label:'Other programs run while we wait',ch:'Chapter 37',text:'A third of a second of waiting, filled with other work.'}];
+}
+const tx=t=>X0+(t-view.a)/(view.b-view.a)*W;
+function fmt(ms){ const a=Math.abs(ms); if(a<1e-9) return '0'; return a>=1?`${+ms.toFixed(a>=100?0:a>=10?1:2)} ms`:a>=1e-3?`${+(ms*1e3).toFixed(a>=0.1?0:1)} µs`:`${+(ms*1e6).toFixed(a>=1e-4?0:2)} ns`; }
+function big(n){ return n>=1e6?(n/1e6).toFixed(n>=1e7?0:1)+' million':Math.round(n).toLocaleString(); }
+function human(sec){ const m=60,h=3600,d=86400,y=365.25*d; return sec<m?`${sec.toFixed(sec<10?1:0)} seconds`:sec<h?`${(sec/m).toFixed(0)} minutes`:sec<d?`${(sec/h).toFixed(1)} hours`:sec<y?`${(sec/d).toFixed(0)} days`:`${(sec/y).toFixed(1)} years`; }
+function render(){
+  const span=view.b-view.a, bottom=40+(cloud?7:6)*56; let h='';
+  svg.setAttribute('viewBox',`0 0 1000 ${bottom+48}`);
+  // time axis: choose a round tick step
+  const steps=[1e-7,2e-7,5e-7,1e-6,2e-6,5e-6,1e-5,2e-5,5e-5,1e-4,2e-4,5e-4,1e-3,2e-3,5e-3,.01,.02,.05,.1,.2,.5,1,2,5,10,20,50,100];
+  const step=steps.find(s=>span/s<=10)||100;
+  // When zoomed far in, absolute times all read "4.2 ms"; label the first tick in full and the rest as offsets from it.
+  const first=Math.ceil(view.a/step)*step, rel=span<0.05;
+  for(let t=first,i=0;t<=view.b;t+=step,i++){ const x=tx(t);
+    const lab=!rel?fmt(t):i===0?`${(t*1000).toFixed(Math.max(0,Math.ceil(-Math.log10(step*1000))))} µs`:`+${fmt(t-first)}`;
+    h+=`<line x1="${x}" y1="24" x2="${x}" y2="${bottom+24}" stroke="#E4E8E2"/><text x="${x}" y="16" text-anchor="middle" font-size="11" fill="${i===0&&rel?'var(--ink)':'var(--muted)'}">${lab}</text>`; }
+  // clock cycles, once they are big enough to see
+  const cyc=1/3*NS, px=W*cyc/span;
+  if(px>3){ let k=Math.floor(view.a/cyc); for(let t=k*cyc;t<view.b;t+=cyc){ const x=tx(t); h+=`<path d="M${x},${bottom+22} V${bottom+10} H${Math.min(tx(t+cyc/2),X0+W)} V${bottom+22}" stroke="var(--live)" stroke-width="2" fill="none"/>`; } h+=`<text x="${X0}" y="${bottom+40}" font-size="11" fill="var(--ink)">Each amber tooth is one clock cycle at 3 GHz: the heartbeat everything above is built from.</text>`; }
+  LANES.forEach((l,i)=>{ if(i===6&&!cloud) return; const y=40+i*56; h+=`<text x="10" y="${y+24}" font-size="13" font-weight="600" fill="var(--ink)">${l}</text><line x1="${X0}" y1="${y+46}" x2="${X0+W}" y2="${y+46}" stroke="#EEF0EC"/>`; });
+  const draw=(e,depth)=>{
+    const x1=Math.max(X0,tx(e.s)), x2=Math.min(X0+W,tx(e.s+e.d)); if(x2<X0||x1>X0+W) return;
+    const w=Math.max(1.5,x2-x1), open=!depth&&e.kids&&w>60, y=40+e.lane*56+(depth?20:0), hh=depth?20:open?16:32, isSel=sel===e;
+    h+=`<g data-ev="${EV.push(e)-1}" style="cursor:pointer"><rect x="${x1}" y="${y+4}" width="${w}" height="${hh}" rx="3" fill="${isSel?'var(--live)':depth?'#5C6670':'var(--chip)'}" stroke="${isSel?'var(--ink)':depth?'#FBFCF9':'none'}" stroke-width="${depth?1.5:1}"/>`;
+    h+=`<title>${e.label}, ${fmt(e.d)}</title>`;
+    if(e.short&&w>e.short.length*6.4+8&&!(w>e.label.length*6.4+12)) h+=`<text x="${x1+4}" y="${y+4+hh/2+4}" font-size="11" fill="#fff">${e.short}</text>`;
+    if(w>e.label.length*(depth||open?6.4:7.4)+12) h+=`<text x="${x1+6}" y="${y+4+hh/2+4}" font-size="${depth||open?11:12}" fill="${isSel?'var(--ink)':'#fff'}">${e.label}</text>`;
+    h+='</g>';
+    if(e.frames&&W*8.33/span>6) for(let t=e.s;t<e.s+e.d;t+=1000/120){ const fx=tx(t); if(fx>X0&&fx<X0+W) h+=`<rect x="${fx}" y="${y+40}" width="${Math.max(1,W*2/span)}" height="8" fill="var(--live)"/>`; }
+    if(open) e.kids.forEach(k=>draw(k,1));
+  };
+  EV=[]; events().forEach(e=>draw(e,0));
+  svg.innerHTML=h;
+  const cycles=span/cyc;
+  document.getElementById('read').innerHTML=
+    `<div><small>Width of this view</small><b>${fmt(span)}</b><small>${domainEnd/span<1.5?'the whole tap':'magnified ×'+big(domainEnd/span)}</small></div>`+
+    `<div><small>Clock cycles in view (3 GHz)</small><b>${cycles>=1e9?(cycles/1e9).toFixed(2)+' billion':big(cycles)}</b><small>the whole tap: ${cloud?'2.2':'1.2'} billion</small></div>`+
+    `<div><small>If each cycle took one second</small><b style="font-size:18px">${human(cycles)}</b><small>the whole tap would take ${cloud?69:38} years</small></div>`;
+  const z=Math.log10(domainEnd/span)/Math.log10(domainEnd/(2*NS))*1000; document.getElementById('zoom').value=Math.max(0,Math.min(1000,z));
+}
+let EV=[];
+function zoomAt(t,f){ const a=t-(t-view.a)*f, b=t+(view.b-t)*f; if(b-a<1.5*NS||b-a>domainEnd*1.2) return; view={a,b}; render(); }
+svg.addEventListener('wheel',e=>{ e.preventDefault(); const p=pt(e); zoomAt(view.a+(Math.max(X0,p.x)-X0)/W*(view.b-view.a),e.deltaY>0?1.25:0.8); },{passive:false});
+function pt(e){ const q=svg.createSVGPoint(); q.x=e.clientX; q.y=e.clientY; return q.matrixTransform(svg.getScreenCTM().inverse()); }
+let drag=null; const touches=new Map();
+svg.addEventListener('pointerdown',e=>{
+  const g=e.target.closest('[data-ev]');
+  if(g){ sel=EV[+g.dataset.ev]; const d=document.getElementById('detail'); d.innerHTML=`<h2>${sel.label} <span style="font-weight:400;color:var(--muted)">· ${fmt(sel.d)} · ${sel.ch}</span></h2>${sel.text}${sel.kids?' <i>Zoom in to see what happens inside it.</i>':''}`; render(); }
+  touches.set(e.pointerId,pt(e)); svg.setPointerCapture(e.pointerId); drag={x:pt(e).x,view:{...view},dist:null};
+});
+svg.addEventListener('pointermove',e=>{
+  if(!drag||!touches.has(e.pointerId)) return; touches.set(e.pointerId,pt(e));
+  if(touches.size===2){ const [p1,p2]=[...touches.values()], dist=Math.abs(p1.x-p2.x); if(drag.dist){ zoomAt(view.a+((p1.x+p2.x)/2-X0)/W*(view.b-view.a),drag.dist/dist); } drag.dist=dist; return; }
+  const dx=pt(e).x-drag.x, dt=dx/W*(drag.view.b-drag.view.a); view={a:drag.view.a-dt,b:drag.view.b-dt}; render();
+});
+svg.addEventListener('pointerup',e=>{ touches.delete(e.pointerId); if(!touches.size) drag=null; });
+document.getElementById('zoom').oninput=e=>{ const c=(view.a+view.b)/2, span=domainEnd/Math.pow(domainEnd/(2*NS),e.target.value/1000); view={a:c-span/2,b:c+span/2}; render(); };
+document.getElementById('whole').onclick=()=>{ view={a:-5,b:domainEnd}; render(); };
+document.getElementById('cloud').onclick=e=>{ cloud=!cloud; domainEnd=cloud?740:410; e.target.textContent=cloud?'Back to the photo on the phone':'What if the photo lived in the cloud?'; view={a:-5,b:domainEnd}; sel=null; render();
+  document.querySelectorAll('#tourbar .btn').forEach(x=>x.classList.remove('dark'));
+  document.getElementById('tourtext').innerHTML=cloud?'<b>The photo is somewhere else.</b> Local storage drops out and a network lane appears. Almost all the new time is distance: light in glass needs about 80 ms to cross 8,000 km and come back, and the conversation needs several round trips. The processor fills the wait with other work. Nothing on the phone got slower; the world got bigger.':'<b>Back on the phone.</b> The tour stops take you from the whole tap down to single clock ticks.'; };
+// Guided tour: each stop is a window of time, from the whole tap down to single clock ticks.
+const TOUR=[
+  ['The whole tap',-5,410,'Nothing here takes long by human standards. The longest bar, the animation, is still only a fifth of a second. Most of what a phone does, it does while you are not looking: notice the long wait for storage filled with other programs.'],
+  ['The first three milliseconds',0,6,'Before the picture has moved at all: the touch chip finds the finger, interrupts the processor, and the news is routed to the right program.'],
+  ['Inside the interrupt',2.799,2.8465,'Forty-five microseconds. Saving and restoring the processor’s state takes almost nothing; most of the time goes on asking the touch chip for its numbers over a slow bus.'],
+  ['Half a microsecond of the photo app',4.19995,4.2005,'Now single operations are visible. One trip to main memory, 80 ns, costs as much time as hundreds of instructions. This is why the memory hierarchy exists.'],
+  ['Five nanoseconds',4.2003805,4.2003855,'The bottom. Each amber tooth is one clock cycle, a third of a nanosecond. Every bar above this line is made of these, 1.2 billion of them for one tap.']];
+document.getElementById('tourbar').innerHTML='<span style="font-size:13px;color:var(--muted)">Take the tour:</span>'+TOUR.map((t,i)=>`<button class="btn" data-t="${i}">${i+1}. ${t[0]}</button>`).join('');
+document.getElementById('tourbar').onclick=e=>{ const b=e.target.closest('[data-t]'); if(!b) return; const t=TOUR[+b.dataset.t];
+  if(cloud) document.getElementById('cloud').click();
+  document.querySelectorAll('#tourbar .btn').forEach(x=>x.classList.toggle('dark',x===b));
+  const from={...view}, to={a:t[1],b:t[2]}, t0=performance.now();
+  // Animate on a logarithmic scale so the zoom feels like steady magnification.
+  const la=Math.log(from.b-from.a), lb=Math.log(to.b-to.a), ca=(from.a+from.b)/2, cb=(to.a+to.b)/2;
+  (function anim(now){ const k=Math.min(1,(now-t0)/1400), e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2, span=Math.exp(la+(lb-la)*e), c=ca+(cb-ca)*Math.min(1,e*1.4);
+    view={a:c-span/2,b:c+span/2}; render(); if(k<1) requestAnimationFrame(anim); else { view=to; render(); } })(t0);
+  document.getElementById('tourtext').innerHTML=`<b>${t[0]}.</b> ${t[3]}`; };
+document.getElementById('tourtext').innerHTML='<b>Start here:</b> press the tour stops in order, or explore freely. A fast tap and a slow one look identical to you. To the phone, they are different lifetimes.';
+render();
+</script>

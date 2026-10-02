@@ -1,0 +1,175 @@
+<meta charset="utf-8">
+<!-- Pull the Plug — Switches All the Way Down, Chapter 28 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1160px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--red)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.plug{background:var(--red);color:#fff;border-color:var(--red);font-size:16px;padding:12px 20px}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.disk{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:10px 0}
+.blk{border:1px solid var(--line);border-radius:8px;padding:8px 4px;text-align:center;font-family:"JetBrains Mono",monospace;font-size:13px;min-height:64px;display:flex;flex-direction:column;justify-content:center;transition:background .2s}
+.blk small{display:block;font-family:Barlow;font-size:10px;color:var(--soft)}
+.blk.data{background:#E1F0FB;border-color:var(--cyan)}
+.blk.meta{background:#FBE9F3;border-color:var(--pink)}
+.blk.journal{background:#FFF3D6;border-color:var(--sun)}
+.blk.writing{background:var(--sun);color:#fff;animation:pulse .5s infinite}
+.blk.corrupt{background:#FBDADA;border-color:var(--red);color:var(--red)}
+@keyframes pulse{50%{opacity:.5}}
+.steps{margin:8px 0}
+.st{padding:6px 10px;border-radius:7px;margin:3px 0;font-family:"JetBrains Mono",monospace;font-size:13px;background:var(--bg);display:flex;justify-content:space-between}
+.st.done{color:var(--soft)}.st.cur{background:#FFF3D6;font-weight:700}
+.note{background:#E4F6EE;border:1px solid #B7E4CE;border-radius:8px;padding:10px 12px;font-size:14px}
+.bad{background:#FBDADA;border:1px solid #F0B0B0;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600;color:#8A1A1A}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+.tally{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tal{background:var(--bg);border-radius:10px;padding:12px;text-align:center}
+.tal b{display:block;font-size:34px;font-family:"JetBrains Mono",monospace}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Pull the <span>plug</span></h1>
+  <p>Saving a file is not one action; it is several writes that must all happen. A computer can lose power between any two of them. Save a file, and cut the power whenever you like. See what a disk looks like when a write is interrupted, and how journaling saves it.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar"><span style="color:var(--soft)">Filesystem:</span>
+      <button class="btn on" data-m="plain">Plain (no journal)</button>
+      <button class="btn" data-m="journal">Journaled</button>
+      <span style="flex:1"></span>
+      <button class="btn green" id="save">Save the file</button>
+      <button class="btn plug" id="plug" disabled>⚡ Pull the plug!</button></div>
+    <div class="disk" id="disk"></div>
+    <div class="steps" id="steps"></div>
+    <div id="verdict" style="min-height:26px"></div>
+  </section>
+  <div class="tally">
+    <div class="tal"><small>Power cuts survived</small><b style="color:var(--green)" id="ok">0</b></div>
+    <div class="tal"><small>Left corrupted</small><b style="color:var(--red)" id="corrupt">0</b></div>
+  </div>
+  <section class="card"><h2>Auto-test: 200 power cuts at random moments</h2>
+    <div class="bar"><button class="btn" id="auto">Run 200 random cuts (this mode)</button><span id="autosay" style="color:var(--soft)"></span></div>
+    <canvas id="chart" width="1120" height="120" style="width:100%;height:auto;margin-top:8px"></canvas>
+  </section>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+// Disk blocks: 0-3 file data, 4 the directory (metadata: which blocks belong to the file, and its size),
+// 5 a free-space map, 6-7 a journal area used only in journaled mode.
+let mode='plain', disk=[], steps=[], si=-1, running=false, timer=null, seen={}, okCount=0, corruptCount=0;
+function fresh(){ return [
+ {id:0,type:'data',label:'data',val:'old'},{id:1,type:'data',label:'data',val:'old'},{id:2,type:'data',label:'data',val:'—'},{id:3,type:'data',label:'data',val:'—'},
+ {id:4,type:'meta',label:'directory',val:'2 blocks'},{id:5,type:'meta',label:'free map',val:'0,1 used'},
+ {id:6,type:'journal',label:'journal',val:'empty'},{id:7,type:'journal',label:'journal',val:'empty'}]; }
+disk=fresh();
+// Saving grows the file from 2 blocks to 4 and rewrites the directory and free map.
+function plan(){
+  if(mode==='plain') return [
+   {blk:2,val:'new',t:'write new data to block 2'},
+   {blk:3,val:'new',t:'write new data to block 3'},
+   {blk:5,val:'0-3 used',t:'update free map'},
+   {blk:4,val:'4 blocks',t:'update directory: file is now 4 blocks'}];
+  return [
+   {blk:6,val:'plan: 2,3,map,dir',t:'write the whole plan to the journal'},
+   {blk:7,val:'COMMIT',t:'mark the journal “commit”: the point of no return'},
+   {blk:2,val:'new',t:'copy from journal: data block 2'},
+   {blk:3,val:'new',t:'copy from journal: data block 3'},
+   {blk:5,val:'0-3 used',t:'copy from journal: free map'},
+   {blk:4,val:'4 blocks',t:'copy from journal: directory'},
+   {blk:6,val:'empty',t:'clear the journal'}];
+}
+function save(){ if(running) return; disk=fresh(); steps=plan(); si=-1; running=true; $('#plug').disabled=false; $('#save').disabled=true; tick(); }
+function tick(){
+  si++;
+  if(si>=steps.length){ finish(false); return; }
+  const s=steps[si]; render(true);
+  timer=setTimeout(()=>{ disk[s.blk].val=s.val; disk[s.blk].writing=false; render(false); if(running) tick(); }, 750);
+}
+function plug(){
+  if(!running) return; clearTimeout(timer); running=false;
+  // The step in progress is torn: half-written. Mark it corrupt.
+  const s=steps[si]; if(s){ disk[s.blk].torn=true; disk[s.blk].val='½ '+s.val; disk[s.blk].writing=false; }
+  recover();
+}
+function recover(){
+  // On reboot: plain mode has no way to undo a half-finished save. Journaled mode replays or discards.
+  let corrupt=false, msg='';
+  if(mode==='plain'){
+    const dirDone=steps.findIndex(x=>x.blk===4)<=si-0 && disk[4].val==='4 blocks';
+    const dataDone=disk[2].val==='new'&&disk[3].val==='new'&&!disk[2].torn&&!disk[3].torn;
+    const anyTorn=disk.some(b=>b.torn);
+    if(si>=steps.length){ msg='The save finished before you cut power. The file is intact.'; }
+    else if(disk[4].val==='4 blocks'&&!dataDone){ corrupt=true; msg='The directory says the file is 4 blocks, but blocks 2 and 3 were never written (or only half written). The file now points at garbage. This is a corrupted file.'; }
+    else if(anyTorn&&disk[si]&&steps[si].blk===4){ corrupt=true; msg='Power was cut while rewriting the directory itself. The list of which blocks belong to the file is now half-updated: the filesystem cannot even be trusted to list its own files.'; }
+    else msg='You cut power before the directory was updated, so the file is simply still its old 2-block self. The new data in blocks 2–3 is orphaned, but nothing is corrupted — the old file is intact. Filesystems rely on doing the dangerous write (the directory) last.';
+  } else {
+    const committed=disk[7].val==='COMMIT';
+    if(si>=steps.length){ msg='The save finished. The file is intact and the journal is clear.'; }
+    else if(!committed){ msg='On reboot, the journal has no “commit” mark, so the whole planned save is discarded as if it never began. The file is still its old self, cleanly. No corruption.'; disk.forEach(b=>{ if(b.type!=='journal'&&b.torn){ b.torn=false; b.val=b.id<2?'old':'—'; } }); disk[6].val='empty'; disk[7].val='empty'; }
+    else { msg='The journal was committed, so on reboot the filesystem replays it: it re-does every write in the plan, including any that were half-finished. The save completes as if the power had never failed.'; ['2','3','5','4'].forEach(()=>{}); disk[2].val='new';disk[3].val='new';disk[5].val='0-3 used';disk[4].val='4 blocks'; disk.forEach(b=>b.torn=false); disk[6].val='empty';disk[7].val='empty'; }
+  }
+  finish(corrupt,msg);
+}
+function finish(corrupt,msg){
+  running=false; $('#plug').disabled=true; $('#save').disabled=false;
+  if(msg!=null){ if(corrupt){ corruptCount++; find('corrupt'); } else { okCount++; if(mode==='journal') find('journal'); else find('plainlast'); }
+    $('#verdict').innerHTML=`<div class="${corrupt?'bad':'note'}">${msg}</div>`; }
+  $('#ok').textContent=okCount; $('#corrupt').textContent=corruptCount; render(false);
+}
+function render(writing){
+  const s=running?steps[si]:null;
+  $('#disk').innerHTML=disk.map(b=>`<div class="blk ${b.type} ${writing&&s&&s.blk===b.id?'writing':''} ${b.torn?'corrupt':''}"><small>block ${b.id} · ${b.label}</small>${b.val}</div>`).join('');
+  $('#steps').innerHTML=steps.map((x,i)=>`<div class="st ${i<si?'done':''} ${i===si&&running?'cur':''}">${i<si?'✓ ':i===si&&running?'▶ ':'  '}${x.t}</div>`).join('');
+  renderQs();
+}
+document.querySelector('main').addEventListener('click',e=>{ const b=e.target.closest('[data-m]'); if(b){ mode=b.dataset.m; document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x===b)); disk=fresh(); steps=[]; si=-1; running=false; $('#verdict').innerHTML=''; render(false); } });
+$('#save').onclick=save; $('#plug').onclick=plug;
+$('#auto').onclick=()=>{
+  const st=plan(); let corrupt=0, safe=0, old=0;
+  for(let r=0;r<200;r++){ const cut=Math.random()*st.length|0; const res=simulate(cut,st); if(res==='corrupt') corrupt++; else if(res==='old') old++; else safe++; }
+  $('#autosay').textContent=`${mode==='plain'?'Plain':'Journaled'}: ${corrupt} corrupted, ${old} safely kept the old file, ${safe} completed the save.`;
+  drawChart(corrupt,old,safe); if(mode==='journal'&&corrupt===0) find('journalzero'); if(mode==='plain'&&corrupt>0) find('plaincorrupt');
+};
+function simulate(cutAt,st){
+  // returns 'corrupt' | 'old' (old file intact) | 'safe' (completed)
+  if(mode==='journal'){ const commitIdx=st.findIndex(x=>x.val==='COMMIT'); return cutAt>commitIdx? 'safe':'old'; }
+  const dirIdx=st.findIndex(x=>x.blk===4);
+  if(cutAt>=st.length) return 'safe';
+  if(cutAt>=dirIdx) return 'corrupt';   // directory written or being written before data committed
+  return 'old';
+}
+function drawChart(c,o,s){
+  const cv=$('#chart'), g=cv.getContext('2d'), W=cv.width, H=cv.height, total=c+o+s; let x=0;
+  g.clearRect(0,0,W,H);
+  [[c,'#E23A3A','corrupted'],[o,'#0090C8','old file kept'],[s,'#12A66E','save completed']].forEach(([n,col,lab])=>{ const w=n/total*W; g.fillStyle=col; g.fillRect(x,20,w,60); if(w>60){ g.fillStyle='#fff'; g.font='bold 18px Barlow'; g.fillText(n,x+8,56); } g.fillStyle=col; g.font='14px Barlow'; g.fillText(lab,x+2,105); x+=w; });
+}
+const FINDS=[
+ ['plainlast','In plain mode, cut power early in the save (before the directory update).'],
+ ['corrupt','In plain mode, cut power just as the directory is being written.'],
+ ['journal','In journaled mode, cut power at any point and reboot.'],
+ ['plaincorrupt','Run 200 random cuts in plain mode.'],
+ ['journalzero','Run 200 random cuts in journaled mode.']];
+const TELL={
+ plainlast:'No harm done. The new data sits in blocks 2 and 3, but the directory still describes the old 2-block file, so on reboot the computer sees exactly the file it had before. This is why real filesystems write the data first and the pointer to it last: an interrupted save leaves the old version, not a broken one.',
+ corrupt:'This is the disaster. The directory now claims the file is 4 blocks, but the data was never finished, so the file points at whatever bytes happened to be there. Worse, if the cut lands mid-directory, the filesystem cannot even list its files reliably. A single interrupted write to shared structure can damage far more than one file.',
+ journal:'The journal is the trick. The filesystem first writes down its entire plan and a “commit” mark, then carries it out. On reboot it checks the journal: no commit means the save never really started, so discard it; a commit means replay the whole plan, finishing any half-done write. Either way the disk ends in a consistent state — never half-way.',
+ plaincorrupt:'A real share of random power cuts corrupt the file, because there is a window — after the directory is touched but before the data is safe — where any interruption is fatal. This is why the old advice to never turn a computer off without shutting down was real.',
+ journalzero:'Zero corruption, whenever the cut lands. Every outcome is either the clean old file or the completed save. The cost is that everything is written twice — once to the journal, once to its home — which is the price journaling filesystems pay for never being caught half-way.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+render(false); renderQs();
+</script>

@@ -1,0 +1,134 @@
+<meta charset="utf-8">
+<!-- The Scheduler's Desk — Switches All the Way Down, Chapter 37 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--orange)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.orange{background:var(--orange);color:#fff;border-color:var(--orange)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:150px 1fr 90px;gap:10px;align-items:center}
+.sl input{accent-color:var(--pink)} .sl b{font-family:"JetBrains Mono",monospace;color:var(--sun);text-align:right}
+.jobs{display:flex;gap:8px;flex-wrap:wrap}
+.job{border-radius:8px;padding:8px 12px;color:#fff;font-weight:700;cursor:grab;font-size:14px}
+canvas{display:block;width:100%;height:auto;background:#FAFBFE;border:1px solid var(--line);border-radius:10px}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:22px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.note{background:#FDEFE0;border:1px solid #F5CFA6;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>The scheduler’s <span>desk</span></h1>
+  <p>One processor, many programs, all wanting to run at once. The scheduler decides who runs next and for how long, switching so fast it looks simultaneous. There is no perfect answer — only trade-offs between finishing fast and feeling responsive. Take the desk.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar"><span style="color:var(--soft)">Policy:</span>
+      <button class="btn on" data-p="fifo">First come, first served</button>
+      <button class="btn" data-p="sjf">Shortest job first</button>
+      <button class="btn" data-p="rr">Round-robin</button></div>
+    <div class="sl" id="qrow" style="margin-top:10px;display:none"><span>Time slice</span><input type="range" id="quantum" min="1" max="40" value="6"><b id="qv"></b></div>
+    <div class="jobs" id="jobs" style="margin-top:10px"></div>
+    <div class="bar" style="margin-top:10px"><button class="btn orange" id="run">Run the schedule</button><button class="btn" id="reset">New set of jobs</button><span id="say" style="color:var(--soft);font-size:14px"></span></div>
+  </section>
+  <section class="card"><canvas id="gantt" width="1140" height="300" aria-label="Schedule timeline"></canvas></section>
+  <div class="read" id="read"></div>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const COLORS={interactive:'#0090C8',compute:'#E8620A',disk:'#12A66E',batch:'#7A4FE0'};
+let policy='fifo', quantum=6, jobs=[], seen={}, SWITCH=0.6;
+function fresh(){ jobs=[
+  {id:'Video encode',kind:'compute',len:40,arr:0},
+  {id:'Backup',kind:'batch',len:25,arr:0},
+  {id:'Typing',kind:'interactive',len:3,arr:1},
+  {id:'Open file',kind:'disk',len:5,arr:2}]; render(); }
+function render(){
+  $('#qrow').style.display=policy==='rr'?'grid':'none'; $('#qv').textContent=quantum+' ms';
+  $('#jobs').innerHTML=jobs.map(j=>`<div class="job" style="background:${COLORS[j.kind]}">${j.id} · ${j.len} ms${j.arr?` · arrives ${j.arr}`:''}</div>`).join('');
+  document.querySelectorAll('[data-p]').forEach(b=>b.classList.toggle('on',b.dataset.p===policy));
+  renderQs();
+}
+// Build a timeline of (job, start, dur) segments under the chosen policy.
+function schedule(){
+  const segs=[], q=jobs.map(j=>({...j,rem:j.len,first:null,finish:null}));
+  let t=0, last=null, guard=0, rrPtr=0;
+  const ready=()=>q.filter(j=>j.rem>0&&j.arr<=t);
+  while(q.some(j=>j.rem>0)&&guard++<8000){
+    let r=ready();
+    if(!r.length){ t=Math.min(...q.filter(j=>j.rem>0).map(j=>j.arr)); continue; }
+    let job;
+    if(policy==='fifo') job=r.sort((a,b)=>a.arr-b.arr||jobs.indexOf(jobs.find(x=>x.id===a.id))-jobs.indexOf(jobs.find(x=>x.id===b.id)))[0];
+    else if(policy==='sjf') job=r.sort((a,b)=>a.rem-b.rem)[0];
+    else { // round-robin: rotate through ready jobs in arrival order
+      const order=r.sort((a,b)=>a.arr-b.arr||a.id.localeCompare(b.id));
+      const li=order.findIndex(j=>j.id===(last&&last.id));
+      job=order[(li+1)%order.length];
+    }
+    if(last&&job.id!==last.id&&segs.length){ segs.push({id:'switch',kind:'switch',start:t,dur:SWITCH}); t+=SWITCH; }
+    if(job.first===null) job.first=t;
+    const slice=policy==='rr'?Math.min(quantum,job.rem):job.rem;
+    segs.push({id:job.id,kind:job.kind,start:t,dur:slice}); t+=slice; job.rem-=slice;
+    if(job.rem<=0) job.finish=t; last=job;
+  }
+  return {segs,q,total:t};
+}
+function draw(){
+  const {segs,q,total}=schedule(), cv=$('#gantt'), g=cv.getContext('2d'), W=cv.width, H=cv.height, x0=20, w=W-40, y=40, bh=70;
+  g.clearRect(0,0,W,H); const X=t=>x0+t/total*w;
+  segs.forEach(s=>{ const x=X(s.start), sw=Math.max(1,s.dur/total*w);
+    g.fillStyle=s.kind==='switch'?'#C9CDDA':COLORS[s.kind]; g.fillRect(x,y,sw,bh);
+    if(sw>36&&s.kind!=='switch'){ g.fillStyle='#fff'; g.font='13px Barlow'; g.save(); g.beginPath(); g.rect(x,y,sw,bh); g.clip(); g.fillText(s.id,x+5,y+bh/2+5); g.restore(); } });
+  g.strokeStyle='#3A3A55'; for(let s=0;s<=total;s+=Math.max(5,Math.round(total/12/5)*5)){ const x=X(s); g.strokeStyle='#E2E5EE'; g.beginPath(); g.moveTo(x,y); g.lineTo(x,y+bh+6); g.stroke(); g.fillStyle='#5B6172'; g.font='12px Barlow'; g.fillText(`${Math.round(s)}`,x-6,y+bh+22); }
+  g.fillStyle='#1A1C2A'; g.font='bold 14px Barlow'; g.fillText('time (ms) →',x0,y-14);
+  // per-job response and finish
+  let ry=y+bh+50; g.font='13px Barlow';
+  q.forEach(j=>{ g.fillStyle=COLORS[j.kind]; g.fillRect(x0,ry-11,14,14); g.fillStyle='#1A1C2A';
+    g.fillText(`${j.id}: first ran at ${j.first!=null?j.first.toFixed(0):'—'} ms, finished at ${j.finish!=null?j.finish.toFixed(0):'—'} ms`,x0+22,ry); ry+=22; });
+  const switches=segs.filter(s=>s.kind==='switch').length, wasted=switches*SWITCH;
+  const interactive=q.find(j=>j.kind==='interactive');
+  $('#read').innerHTML=`<div><small>Total time to finish everything</small><b>${total.toFixed(0)} ms</b></div>`+
+    (()=>{ const wait=interactive.first-interactive.arr; return `<div><small>Typing’s wait before it responds</small><b style="color:${wait>10?'var(--red)':'var(--green)'}">${wait.toFixed(0)} ms</b><small>${wait>10?'feels laggy':'feels snappy'}</small></div>`; })()+
+    `<div><small>Context switches</small><b>${switches}</b></div>`+
+    `<div><small>Time lost to switching</small><b style="color:${wasted>total*0.1?'var(--red)':'var(--ink)'}">${wasted.toFixed(1)} ms</b></div>`;
+  check(q,total,switches,interactive);
+}
+function check(q,total,sw,inter){
+  if(policy==='fifo'&&(inter.first-inter.arr)>10) find('fifo');
+  if(policy==='sjf') find('sjf');
+  if(policy==='rr'&&quantum<=3) find('tiny');
+  if(policy==='rr'&&quantum>=30) find('huge');
+}
+$('#run').onclick=draw;
+$('#reset').onclick=fresh;
+document.querySelector('main').addEventListener('click',e=>{ const b=e.target.closest('[data-p]'); if(b){ policy=b.dataset.p; render(); draw(); } });
+$('#quantum').oninput=e=>{ quantum=+e.target.value; $('#qv').textContent=quantum+' ms'; draw(); };
+const FINDS=[
+ ['fifo','Run “first come, first served”. When does the quick “open file” job get to run?'],
+ ['sjf','Try “shortest job first”. What happens to the big video encode?'],
+ ['tiny','Round-robin with a tiny time slice (3 ms or less). Look at the grey switch bars.'],
+ ['huge','Round-robin with a big time slice (30 ms or more). How does typing feel?']];
+const TELL={
+ fifo:'First come, first served is fair and simple, and it makes interactive programs miserable. The video encode arrived first, so everything else — your keystroke, opening a file — waits behind its full 40 ms. This is the supermarket queue where someone ahead has a full trolley. Great throughput, terrible responsiveness.',
+ sjf:'Shortest job first gives wonderful average waiting times: little jobs dart through and everyone downstream is happier. But the big video encode can be shoved back again and again as new short jobs keep arriving — it may starve, never finishing. Optimising the average can be cruel to the individual.',
+ tiny:'A tiny time slice makes everything feel instant — every job gets a turn almost immediately — but look at the grey bars. Each switch costs real time (saving one job’s state, loading another’s), and with slices this small, a large fraction of the processor is spent switching rather than working. Responsiveness bought at the cost of throughput.',
+ huge:'A big time slice wastes almost nothing on switching, so total throughput is excellent — but your typing now waits up to a whole slice before the processor comes back to it, and the machine feels sluggish. Every real scheduler picks a slice in the middle (a few to a few tens of milliseconds) and then cheats: it bumps interactive jobs to the front, because a human waiting is worth more than a batch job waiting.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+fresh(); draw();
+</script>

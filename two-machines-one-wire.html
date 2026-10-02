@@ -1,0 +1,130 @@
+<meta charset="utf-8">
+<!-- Two Machines, One Wire — Switches All the Way Down, Chapter 40 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--cyan)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.cyan{background:var(--cyan);color:#fff;border-color:var(--cyan)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:170px 1fr 130px;gap:10px;align-items:center;margin:5px 0}
+.sl input{accent-color:var(--pink)} .sl b{font-family:"JetBrains Mono",monospace;color:var(--sun);text-align:right}
+canvas{display:block;width:100%;height:auto;background:#FAFBFE;border:1px solid var(--line);border-radius:10px}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:20px;font-family:"JetBrains Mono",monospace;word-break:break-all}
+.read small{color:var(--soft);font-size:12px}
+.note{background:#E4F0FA;border:1px solid #B9D8EE;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+input[type=text]{font:inherit;font-family:"JetBrains Mono",monospace;border:1px solid var(--line);border-radius:6px;padding:6px 10px;width:90px}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Two machines, <span>one wire</span></h1>
+  <p>To send a byte between two computers, there is only a voltage on a wire, held high or low for an agreed length of time. If the two ends do not agree on that length, the message turns to nonsense. Set each machine’s speed and watch a byte cross.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar"><span style="color:var(--soft)">Send the byte:</span><input type="text" id="byte" value="01001011" maxlength="8" aria-label="Byte to send">
+      <button class="btn" data-preset="K">‘K’</button><button class="btn" data-preset="rand">random</button></div>
+    <div class="sl" style="margin-top:10px"><span>Sender’s speed (baud)</span><input type="range" id="tx" min="0" max="1000" value="500" aria-label="Sender baud"><b id="txv"></b></div>
+    <div class="sl"><span>Receiver’s speed (baud)</span><input type="range" id="rx" min="0" max="1000" value="500" aria-label="Receiver baud"><b id="rxv"></b></div>
+    <div class="bar" style="margin-top:6px"><button class="btn" id="framing">Start &amp; stop bits: on</button><button class="btn cyan" id="send">Send it</button><button class="btn" id="match">Match the speeds</button></div>
+  </section>
+  <section class="card">
+    <canvas id="wire" width="1140" height="360" aria-label="Signal on the wire"></canvas>
+  </section>
+  <div class="read" id="read"></div>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+let txBaud=1200, rxBaud=1200, framing=true, seen={}, anim=null;
+const baud=v=>Math.round(300*Math.pow(2,v/1000*5));  // 300 … 9600-ish
+function bits(){ return ($('#byte').value.replace(/[^01]/g,'')+'00000000').slice(0,8).split('').map(Number); }
+// The wire sends: idle high, a start bit (low), 8 data bits LSB-first, a stop bit (high).
+function frame(){ const d=bits(); return framing?[1,0,...d.slice().reverse(),1]:d; }
+function labels(){ return framing?['idle','start',...['b0','b1','b2','b3','b4','b5','b6','b7'],'stop']:['b7','b6','b5','b4','b3','b2','b1','b0']; }
+function sample(){
+  const f=frame(), txBit=1/txBaud, total=f.length*txBit, rxBit=1/rxBaud;
+  const wave=t=>{ const i=Math.floor(t/txBit); return i<0?1:i>=f.length?1:f[i]; };
+  const got=[];
+  if(framing){
+    // Receiver idles high, waits for the falling edge (start bit), then samples
+    // the middle of the start bit and every rxBit after: 10 samples in all.
+    let edge=txBit; // start bit begins at t = txBit (after one idle bit)
+    for(let k=0;k<10;k++){ const t=edge+(k+0.5)*rxBit; got.push({t,v:wave(t)}); }
+  } else {
+    for(let k=0;k<8;k++){ const t=(k+0.5)*rxBit; got.push({t,v:wave(t)}); }
+  }
+  return {f,txBit,rxBit,total,got,nbits:got.length};
+}
+function decode(s){
+  let data;
+  if(framing){ const payload=s.got.slice(1,9).map(g=>g.v); data=payload.slice().reverse(); const startOk=s.got[0].v===0, stopOk=s.got[9].v===1;
+    return {data,ok:startOk&&stopOk,startOk,stopOk}; }
+  else { data=s.got.map(g=>g.v); return {data,ok:true}; }
+}
+function draw(prog){
+  const s=sample(), cv=$('#wire'), g=cv.getContext('2d'), W=cv.width, H=cv.height, x0=40, w=W-60, ymid=110, amp=55;
+  g.clearRect(0,0,W,H);
+  const X=t=>x0+t/s.total*w, Y=v=>ymid-(v-0.5)*2*amp;
+  // sender bit boundaries
+  for(let i=0;i<=s.f.length;i++){ const x=X(i*s.txBit); g.strokeStyle='#EDEFF6'; g.beginPath(); g.moveTo(x,40); g.lineTo(x,180); g.stroke(); }
+  // the waveform
+  g.strokeStyle='#0090C8'; g.lineWidth=4; g.beginPath(); let py=Y(1);
+  for(let i=0;i<s.f.length;i++){ const x1=X(i*s.txBit), x2=X((i+1)*s.txBit), y=Y(s.f[i]); g.lineTo(x1,py); g.lineTo(x1,y); g.lineTo(x2,y); py=y; } g.stroke();
+  // sender labels
+  const L=labels(); g.font='12px Barlow'; g.fillStyle='#5B6172';
+  for(let i=0;i<s.f.length;i++){ g.fillText(L[i]||'',X((i+0.5)*s.txBit)-10,196); g.fillStyle=s.f[i]?'#0090C8':'#E5197B'; g.fillText(s.f[i],X((i+0.5)*s.txBit)-3,Y(s.f[i])+(s.f[i]?-8:16)); g.fillStyle='#5B6172'; }
+  g.fillStyle='#1A1C2A'; g.font='bold 13px Barlow'; g.fillText('the wire (blue = high, sender holds each bit for its own bit-time)',x0,28);
+  g.fillStyle='#5B6172'; g.fillText('high',6,Y(1)+4); g.fillText('low',10,Y(0)+4);
+  // receiver sample points
+  g.font='bold 13px Barlow'; g.fillStyle='#1A1C2A'; g.fillText('where the receiver looks (once per its own bit-time):',x0,250);
+  s.got.forEach((pt,k)=>{ const x=X(pt.t); g.strokeStyle='#E8A400'; g.setLineDash([4,4]); g.beginPath(); g.moveTo(x,40); g.lineTo(x,300); g.stroke(); g.setLineDash([]);
+    g.fillStyle=pt.v?'#0090C8':'#E5197B'; g.beginPath(); g.arc(x,270,9,0,7); g.fill(); g.fillStyle='#fff'; g.font='bold 12px JetBrains Mono'; g.fillText(pt.v,x-3,274); });
+  $('#wire').getContext('2d');
+  const dec=decode(s), sent=bits(), match=dec.data.join('')===sent.join('');
+  $('#read').innerHTML=`<div><small>You sent</small><b>${sent.join('')}</b><small>“${chr(sent)}”</small></div>`+
+    `<div><small>Receiver read</small><b style="color:${match?'var(--green)':'var(--red)'}">${dec.data.join('')}</b><small>“${chr(dec.data)}”</small></div>`+
+    `<div><small>Speeds</small><b style="font-size:16px">${txBaud} / ${rxBaud}</b><small>receiver is ${rxBaud===txBaud?'matched':rxBaud>txBaud?(Math.round((rxBaud/txBaud-1)*100))+'% too fast':(Math.round((1-rxBaud/txBaud)*100))+'% too slow'}</small></div>`+
+    (framing?`<div><small>Frame check</small><b style="color:${dec.startOk&&dec.stopOk?'var(--green)':'var(--red)'}">${dec.startOk&&dec.stopOk?'OK':'bad frame'}</b><small>start ${dec.startOk?'✓':'✗'} stop ${dec.stopOk?'✓':'✗'}</small></div>`:'');
+  check(match,dec);
+}
+const chr=arr=>{ const n=parseInt(arr.join(''),2); return n>=32&&n<127?String.fromCharCode(n):'·'; };
+function check(match,dec){
+  const mism=Math.abs(txBaud-rxBaud)/txBaud;
+  if(mism<0.02&&match) find('match');
+  if(mism>0.15&&!match) find('mismatch');
+  if(framing) find('frame');
+}
+$('#send').onclick=()=>draw();
+$('#match').onclick=()=>{ $('#rx').value=$('#tx').value; rxBaud=txBaud; $('#rxv').textContent=rxBaud+' baud'; draw(); };
+$('#framing').onclick=()=>{ framing=!framing; $('#framing').textContent=`Start & stop bits: ${framing?'on':'off'}`; $('#framing').classList.toggle('on',!framing); draw(); };
+$('#tx').oninput=e=>{ txBaud=baud(+e.target.value); $('#txv').textContent=txBaud+' baud'; draw(); };
+$('#rx').oninput=e=>{ rxBaud=baud(+e.target.value); $('#rxv').textContent=rxBaud+' baud'; draw(); };
+document.querySelector('main').addEventListener('click',e=>{ const b=e.target.closest('[data-preset]'); if(b){ $('#byte').value=b.dataset.preset==='K'?'01001011':[...Array(8)].map(()=>Math.random()<.5?1:0).join(''); draw(); } });
+$('#byte').addEventListener('input',()=>draw());
+const FINDS=[
+ ['match','Set both machines to the same speed and send a byte.'],
+ ['mismatch','Make the receiver much faster or slower than the sender.'],
+ ['frame','With framing on, note what the start and stop bits are for.']];
+const TELL={
+ match:'When both ends agree on how long a bit lasts, the receiver samples each bit right in its middle and reads exactly what was sent. That shared bit-time is the whole agreement; there is no clock signal on the wire, only the promise that both count at the same rate.',
+ mismatch:'With the speeds mismatched, the receiver’s sample points drift: it looks a little too early or too late for each bit, and by the end of the byte it has slipped into the wrong bit entirely. One wrong number and “K” becomes garbage. This is why every serial link, from an old modem to USB, begins by agreeing on a baud rate.',
+ frame:'Idle, the wire sits high. The start bit — a single low — is the falling edge the receiver waits for; it resets the receiver’s counter so a small speed mismatch has only eight bits to accumulate over, not a whole message. The stop bit — a high — guarantees there is always an edge before the next byte’s start bit. Those two extra bits are the cost of having no shared clock, and they are why old serial was “8-N-1”: 8 data bits, no parity, 1 stop bit.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join('')+'<p style="font-size:12px;color:var(--soft)">Bench card: a shift register at each end (74HC595 out, 74HC165 in) turns a byte into a train of bits and back. Two of your Bench Computers can talk this way.</p>'; }
+$('#txv').textContent=txBaud+' baud'; $('#rxv').textContent=rxBaud+' baud'; draw(); renderQs();
+</script>

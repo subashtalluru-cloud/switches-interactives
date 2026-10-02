@@ -1,0 +1,143 @@
+<meta charset="utf-8">
+<!-- Defect Rain — Switches All the Way Down, Chapter 17 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2;--red:#FF3B3B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1220px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--red)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:17px;margin:0 0 8px;font-weight:800}
+.panel{background:var(--night2);border-radius:12px;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:none;border-radius:6px;padding:8px 13px;cursor:pointer;background:var(--night3);color:#fff}
+.btn.pink{background:var(--pink)}.btn.on{background:var(--sun);color:var(--ink)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:170px 1fr 120px;gap:10px;align-items:center;margin:5px 0}
+.sl input{accent-color:var(--pink)}
+.sl b{font-family:"JetBrains Mono",monospace;font-size:18px;color:var(--sun);text-align:right}
+.two{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;align-items:start}
+canvas{display:block;width:100%;height:auto;border-radius:8px;background:#0F0B2E}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.read div{background:var(--night3);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:24px;font-family:"JetBrains Mono",monospace;color:var(--sun)}
+.read small{color:var(--soft);font-size:12px}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--night3);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.two{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Defect <span>rain</span></h1>
+  <p>Chips are made hundreds at a time on a 30 cm disc of silicon. Specks of dust and flaws land at random, and a single one in the wrong place kills a whole chip. Choose how big each chip is and how clean the factory is, then let it rain.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="panel">
+    <div class="sl"><span>Chip size</span><input type="range" id="area" min="0" max="1000" value="330" aria-label="Chip area"><b id="av"></b></div>
+    <div class="sl"><span>Flaws per cm²</span><input type="range" id="dens" min="0" max="1000" value="500" aria-label="Defect density"><b id="dv"></b></div>
+    <div class="sl"><span>Cost of one wafer</span><input type="range" id="cost" min="1000" max="20000" step="500" value="10000" aria-label="Wafer cost"><b id="cv"></b></div>
+    <div class="bar" style="margin-top:6px"><button class="btn pink" id="rain">Let it rain</button><button class="btn" id="chip">Split each chip into 4 chiplets: off</button><button class="btn" id="many">Make 20 wafers</button></div>
+  </section>
+  <div class="two">
+    <section class="panel"><canvas id="wafer" width="760" height="760" aria-label="Wafer"></canvas>
+      <div class="bar" style="font-size:13px;color:var(--soft);margin-top:6px;gap:14px"><span style="color:var(--green)">■ working chip</span><span style="color:var(--red)">■ killed by a flaw</span><span style="color:#6b62b8">■ wasted at the round edge</span></div></section>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="read" id="read"></div>
+      <section class="panel"><h2>Share of chips that work, by chip size</h2><canvas id="curve" width="700" height="480"></canvas>
+        <p style="font-size:13px;color:var(--soft);margin:6px 0 0">Line: what probability predicts for this flaw rate. Dots: your wafers.</p></section>
+    </div>
+  </div>
+</main>
+<aside class="panel" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), R=150, EDGE=3, WAREA=Math.PI*R*R;
+let A=0, D=0, cost=10000, chiplets=false, defects=[], dies=[], runs=[], animating=false, seen={};
+const map=(v,a,b)=>a*Math.pow(b/a,v/1000);
+function read(){ A=Math.round(map(+$('#area').value,10,800)); D=+map(+$('#dens').value,0.01,2).toFixed(3); cost=+$('#cost').value;
+  $('#av').textContent=`${A} mm²`; $('#dv').textContent=D.toFixed(D<0.1?3:2); $('#cv').textContent=`$${cost.toLocaleString()}`; }
+function layout(){
+  const a=chiplets?A/4*1.1:A, s=Math.sqrt(a), out=[], n=Math.ceil(R/s)+1;
+  for(let i=-n;i<n;i++) for(let j=-n;j<n;j++){ const x=i*s, y=j*s, corners=[[x,y],[x+s,y],[x,y+s],[x+s,y+s]];
+    const inside=corners.every(([cx,cy])=>Math.hypot(cx,cy)<=R-EDGE), any=corners.some(([cx,cy])=>Math.hypot(cx,cy)<=R);
+    if(any) out.push({x,y,s,inside,dead:false}); }
+  return out;
+}
+// Flaws land uniformly at random; their number follows a Poisson distribution.
+function poisson(mean){ if(mean>60) return Math.max(0,Math.round(mean+Math.sqrt(mean)*gauss())); let L=Math.exp(-mean),k=0,p=1; do{ k++; p*=Math.random(); }while(p>L); return k-1; }
+function gauss(){ let u=0,v=0; while(!u) u=Math.random(); while(!v) v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function makeDefects(){ const n=poisson(D/100*WAREA), d=[]; while(d.length<n){ const x=(Math.random()*2-1)*R, y=(Math.random()*2-1)*R; if(Math.hypot(x,y)<=R) d.push({x,y}); } return d; }
+function judge(){ dies.forEach(di=>di.dead=di.inside&&defects.some(p=>p.x>=di.x&&p.x<di.x+di.s&&p.y>=di.y&&p.y<di.y+di.s)); }
+function stats(){
+  const whole=dies.filter(d=>d.inside), good=whole.filter(d=>!d.dead).length;
+  const products=chiplets?Math.floor(good/4):good, candidates=chiplets?Math.floor(whole.length/4):whole.length;
+  return {whole:whole.length, edge:dies.length-whole.length, good, products, candidates, y:whole.length?good/whole.length:0};
+}
+function drawWafer(drops){
+  const cv=$('#wafer'), g=cv.getContext('2d'), W=cv.width, c=W/2, k=(W/2-20)/R;
+  g.clearRect(0,0,W,W);
+  const gr=g.createRadialGradient(c-80,c-80,40,c,c,W/2); gr.addColorStop(0,'#5B5FA8'); gr.addColorStop(1,'#2B2966');
+  g.fillStyle=gr; g.beginPath(); g.arc(c,c,R*k,0,7); g.fill();
+  g.save(); g.beginPath(); g.arc(c,c,R*k,0,7); g.clip();
+  dies.forEach(d=>{ g.fillStyle=!d.inside?'rgba(107,98,184,.55)':d.dead?'#FF3B3B':(defects.length||runs.length?'#00C48C':'#7A7FD0');
+    g.fillRect(c+d.x*k+1,c+d.y*k+1,d.s*k-2,d.s*k-2); });
+  g.restore();
+  g.fillStyle='#FFC700'; defects.forEach(p=>{ g.beginPath(); g.arc(c+p.x*k,c+p.y*k,Math.max(2.5,3),0,7); g.fill(); });
+  if(drops) drops.forEach(p=>{ g.fillStyle='#FFC700'; g.beginPath(); g.arc(c+p.x*k,p.yy,4,0,7); g.fill(); });
+  g.fillStyle='#1B1446'; g.beginPath(); g.moveTo(c-18,c+R*k+2); g.lineTo(c,c+R*k-14); g.lineTo(c+18,c+R*k+2); g.fill(); // alignment notch
+}
+function readout(){
+  const s=stats(), per=s.products?cost/s.products:Infinity;
+  $('#read').innerHTML=`<div><small>${chiplets?'Chiplets':'Chips'} that fit whole</small><b>${s.whole}</b><small>${s.edge} cut off at the edge</small></div>`+
+    `<div><small>Working ${chiplets?'chiplets':'chips'}</small><b style="color:var(--green)">${s.good}</b><small>${(s.y*100).toFixed(0)}% ${defects.length?'of this wafer':'(not rained yet)'}</small></div>`+
+    `<div><small>Finished ${chiplets?'products (4 chiplets each)':'chips'}</small><b>${s.products}</b></div>`+
+    `<div><small>Cost of each working one</small><b>${isFinite(per)?'$'+Math.round(per).toLocaleString():'—'}</b><small>wafer cost ÷ good ones</small></div>`;
+}
+function drawCurve(){
+  const cv=$('#curve'), g=cv.getContext('2d'), W=cv.width, H=cv.height, x0=70, y0=H-54, w=W-100, h=H-90;
+  g.clearRect(0,0,W,H); g.strokeStyle='#3A2E8A'; g.lineWidth=2; g.strokeRect(x0,y0-h,w,h);
+  g.fillStyle='#C9C4F2'; g.font='22px Barlow'; [0,50,100].forEach(p=>g.fillText(`${p}%`,12,y0-p/100*h+8));
+  [0,200,400,600,800].forEach(a=>g.fillText(`${a}`,x0+a/800*w-14,y0+32)); g.fillText('mm²',x0+w-40,y0+32);
+  g.strokeStyle='#00C2FF'; g.lineWidth=5; g.beginPath(); for(let a=0;a<=800;a+=5) g.lineTo(x0+a/800*w,y0-Math.exp(-D/100*a)*h); g.stroke();
+  runs.forEach(r=>{ g.fillStyle=r.chiplets?'#FFC700':'#FF2E88'; g.beginPath(); g.arc(x0+r.a/800*w,y0-r.y*h,8,0,7); g.fill(); });
+  g.strokeStyle='#fff'; g.setLineDash([6,6]); g.beginPath(); g.moveTo(x0+(chiplets?A/4*1.1:A)/800*w,y0-h); g.lineTo(x0+(chiplets?A/4*1.1:A)/800*w,y0); g.stroke(); g.setLineDash([]);
+}
+function reset(){ read(); dies=layout(); defects=[]; drawWafer(); readout(); drawCurve(); }
+async function rain(anim=true){
+  if(animating) return; animating=true;
+  dies=layout(); defects=[]; const target=makeDefects();
+  if(anim){ const W=760, k=(W/2-20)/R, c=W/2, frames=28; const drops=target.map(p=>({...p,yy:-Math.random()*300,ty:c+p.y*k}));
+    for(let f=0;f<=frames;f++){ drops.forEach(d=>{ d.yy=Math.min(d.ty,d.yy+(d.ty+300)/frames); }); drawWafer(drops); await new Promise(r=>requestAnimationFrame(r)); } }
+  defects=target; judge(); drawWafer(); readout();
+  const s=stats(); runs.push({a:chiplets?A/4*1.1:A,y:s.y,chiplets}); if(runs.length>120) runs.shift(); drawCurve(); animating=false; checkFinds(s);
+}
+let lastBig=null;
+function checkFinds(s){
+  if(!chiplets){ if(A>=380&&s.y<0.35) find('big'); if(A<=40&&s.y>0.9) find('small');
+    if(lastBig&&Math.abs(A/lastBig.a-2)<0.25&&Math.abs(D-lastBig.D)<1e-9&&s.good<lastBig.good/2) find('double'); lastBig={a:A,D,good:s.good}; }
+  if(chiplets&&A>=300) find('chiplet');
+  if(s.edge>s.whole*0.25&&!chiplets) find('edge');
+}
+$('#rain').onclick=()=>rain(true);
+$('#many').onclick=async()=>{ for(let i=0;i<20;i++){ await rain(false); } };
+$('#chip').onclick=()=>{ chiplets=!chiplets; $('#chip').textContent=`Split each chip into 4 chiplets: ${chiplets?'on':'off'}`; $('#chip').classList.toggle('on',chiplets); reset(); };
+['#area','#dens','#cost'].forEach(id=>$(id).addEventListener('input',()=>{ if(id==='#cost'){ read(); readout(); } else reset(); }));
+const FINDS=[
+ ['small','Make small chips (under 40 mm²) and rain. What share survive?'],
+ ['big','Make big chips (over 400 mm², a large graphics chip) at the same flaw rate.'],
+ ['double','Rain, then double the chip size and rain again. Do the working chips halve?'],
+ ['edge','Find a size where the round edge wastes a lot of the wafer.'],
+ ['chiplet','With big chips, switch on chiplets. Compare the finished products and the cost of each.']];
+const TELL={
+ small:'Small chips mostly survive: with a flaw every few square centimetres, a chip of a few square millimetres is rarely hit. Most flaws land on a chip, but each one only kills one small chip.',
+ big:'Big chips are slaughtered. A flaw anywhere inside kills the whole chip, so the chance of surviving falls off exponentially with area: the curve is e to the power of minus (flaw rate × area). This is why the largest chips cost many times more than twice the smaller ones.',
+ double:'Doubling the size more than halves the number of working chips: half as many fit, and each is also twice as likely to be hit. The cost of a working chip therefore grows faster than its size.',
+ edge:'Square chips cannot tile a circle. With big chips the ring at the edge, where no whole chip fits, eats a large share of an expensive wafer.',
+ chiplet:'Four small chiplets, each a quarter of the size, survive far more often. A flaw now kills one quarter of a product, not the whole thing, and the bad quarter is simply discarded before assembly. The cost is a little extra area for the connections between them. Many recent AMD and Intel processors are built this way.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join('')+'<p style="font-size:12px;color:var(--soft)">Flaw rates and wafer prices are realistic round numbers; real ones are closely kept secrets.</p>'; }
+reset(); renderQs();
+</script>

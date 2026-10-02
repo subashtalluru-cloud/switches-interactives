@@ -1,0 +1,2190 @@
+<meta charset="utf-8">
+<!-- The Workbench, Switches All the Way Down. Stations: Gates (Ch 14), Adder (Ch 15), Memory (Ch 16), CPU (Ch 18) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E9ECE6; --panel:#F6F7F3; --ink:#1F2A36; --muted:#5E6A72;
+  --wire:#8E979C; --live:#F2A900; --chip:#25272C; --good:#3C7A4E; --bad:#B5462F;
+  --line:#CBD1CA;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.app{display:grid;grid-template-columns:220px 1fr 300px;gap:14px;padding:14px;max-width:1400px;margin:0 auto}
+header{grid-column:1/-1;display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+h1{font-size:30px;margin:0;font-weight:700;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);max-width:62ch}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px}
+h2{font-size:15px;margin:0 0 8px;font-weight:600}
+.steps{list-style:none;margin:0;padding:0}
+.steps li{margin-bottom:6px}
+.steps button{width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:4px;padding:8px 10px;font:inherit;cursor:pointer;display:flex;justify-content:space-between;align-items:center;color:var(--ink)}
+.steps button[aria-current="true"]{border-color:var(--ink);box-shadow:inset 3px 0 0 var(--ink)}
+.steps button:disabled{opacity:.45;cursor:not-allowed}
+.steps button span{white-space:nowrap;margin-left:6px}
+.steps .tag{font-size:12px;color:var(--muted)}
+.steps .done{color:var(--good);font-weight:600}
+.bin{margin-top:14px}
+.part{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-top:1px solid var(--line)}
+.part span:last-child{color:var(--muted)}
+.stage{display:flex;flex-direction:column;gap:8px;min-width:0}
+.toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.btn{font:inherit;font-size:14px;border:1px solid var(--ink);background:#fff;color:var(--ink);border-radius:4px;padding:6px 11px;cursor:pointer}
+.btn.dark{background:var(--ink);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:focus-visible,.steps button:focus-visible{outline:3px solid var(--live);outline-offset:2px}
+.toolbar label{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;margin-left:auto}
+svg#board{width:100%;height:auto;background-color:#FBFCF9;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:20px 20px;border:1px solid var(--line);border-radius:6px;touch-action:none;user-select:none}
+.status{font-size:13px;color:var(--muted);min-height:20px}
+.task{font-size:15px}
+.task b{font-weight:600}
+table{border-collapse:collapse;font-family:"JetBrains Mono",monospace;font-size:13px;width:100%;margin:6px 0}
+th,td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:center}
+th{font-weight:600;color:var(--muted)}
+tr.now td{background:#FFF3CC}
+.ok{color:var(--good);font-weight:600}.no{color:var(--bad);font-weight:600}
+.hint{background:#fff;border-left:3px solid var(--live);padding:8px 10px;font-size:14px;margin-top:6px}
+.win{background:#EAF3EC;border:1px solid #BFD7C6;border-radius:5px;padding:10px;margin-top:10px;font-size:14px}
+.bench{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;font-size:14px}
+.bench svg{width:100%;height:auto;margin:6px 0}
+.side{display:flex;flex-direction:column}
+@media (max-width:1000px){.app{grid-template-columns:1fr}.side,.left{order:2}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.stations{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.stations button{flex:1 1 40%;font:inherit;font-size:13px;padding:6px;border:1px solid var(--ink);background:#fff;border-radius:4px;cursor:pointer;color:var(--ink)}
+.stations button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.stations button:disabled{opacity:.4;cursor:not-allowed}
+#raceWrap,#counterWrap,#ramWrap,#cpuWrap,#romWrap,#isaWrap,#handWrap,#faultWrap,#bootWrap,#compileWrap,#capWrap{display:none;flex-direction:column;gap:8px}
+#race,#counter,#ram,#cpu,#isa,#boot{width:100%;height:auto;background:#FBFCF9;border:1px solid var(--line);border-radius:6px;touch-action:manipulation;user-select:none}
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.readout div{background:#fff;border:1px solid var(--line);border-radius:5px;padding:8px 10px}
+.readout b{display:block;font-size:24px;font-family:"JetBrains Mono",monospace}
+.readout small{color:var(--muted);font-size:12px}
+.trail{font-family:"JetBrains Mono",monospace;font-size:13px;background:#fff;border:1px solid var(--line);border-radius:5px;padding:8px 10px;min-height:44px;line-height:1.7}
+.trail span{display:inline-block;margin-right:10px}
+.trail .wrong{color:var(--bad)} .trail .right{color:var(--good);font-weight:600}
+.cword{display:flex;flex-wrap:wrap;gap:4px}
+.cl{font-family:"JetBrains Mono",monospace;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:3px;background:#fff;color:#99a}
+.cl.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.csay{font-size:15px;min-height:22px}
+.cpucols{display:grid;grid-template-columns:260px 1fr;gap:10px}
+.cpucols textarea{width:100%;height:260px;font-family:"JetBrains Mono",monospace;font-size:13px;border:1px solid var(--line);border-radius:5px;padding:8px}
+.cpucols table td,.cpucols table th{padding:2px 6px}
+.gridwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:6px}
+#rgrid{margin:0;font-size:12px}
+#rgrid th{font-size:11px;padding:4px 2px;cursor:help}
+#rgrid td{padding:2px}
+#rgrid .rl{text-align:left;white-space:nowrap;font-family:Barlow;font-size:13px;padding-right:8px}
+.rc{width:26px;height:22px;border:1px solid var(--line);background:#fff;border-radius:3px;cursor:pointer;padding:0}
+.rc.drv{border-color:#8E979C}
+.rc.on{background:var(--live);border-color:var(--ink)}
+.rc:focus-visible{outline:3px solid var(--ink)}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:2px 12px;font-size:12px;color:var(--muted)}
+.legend b{color:var(--ink);font-family:"JetBrains Mono",monospace;display:inline-block;width:32px}
+@media (max-width:1000px){.cpucols{grid-template-columns:1fr}}
+.jobs{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.job{background:#fff;border:1px solid var(--line);border-left:4px solid var(--bad);border-radius:5px;padding:8px 10px;font-size:13px;display:flex;flex-direction:column;gap:2px}
+.job.ok{border-left-color:var(--good)}
+.job small{color:var(--muted)}
+.sw{width:30px;height:34px;border:1.5px solid var(--ink);border-radius:4px;background:#fff;font-family:"JetBrains Mono",monospace;cursor:pointer;color:var(--ink)}
+.sw.opb{background:#EEF0EC}
+.sw.on{background:var(--ink);color:#fff}
+.sw:focus-visible{outline:3px solid var(--live)}
+#hrows td{padding:3px 3px}
+.fpanel{background:var(--chip);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:5px}
+.frow{display:flex;align-items:center;gap:5px;color:#ccc;font-size:12px}
+.frow span{width:120px}
+.frow i{width:13px;height:13px;border-radius:50%;background:#4a4d52;display:inline-block}
+.frow i.on{background:#FF4B3A;box-shadow:0 0 6px #FF4B3A}
+.frow b{margin-left:8px;color:#fff;font-family:"JetBrains Mono",monospace;font-weight:400}
+.frow em{font-style:normal;display:flex;flex-wrap:wrap;gap:3px}
+.frow u{text-decoration:none;font-family:"JetBrains Mono",monospace;font-size:10px;padding:1px 3px;border-radius:2px;color:#777;background:#35383c}
+.frow u.on{color:#111;background:#6CD46C}
+#fscope{width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:6px}
+.fcols{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:10px;align-items:start}
+@media (max-width:1000px){.fcols{grid-template-columns:1fr}}
+.tccols{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:10px;align-items:start}
+.tccols textarea{width:100%;height:320px;font-family:"JetBrains Mono",monospace;font-size:14px;border:1px solid var(--line);border-radius:5px;padding:8px}
+#tctree{background:#fff;border:1px solid var(--line);border-radius:5px;min-height:320px;padding:6px;overflow:auto;text-align:center}
+#tcasm{background:#fff;border:1px solid var(--line);border-radius:5px;height:320px;overflow:auto;font-family:"JetBrains Mono",monospace;font-size:12px;padding:4px 0}
+.asl{padding:1px 10px;cursor:pointer;white-space:pre}
+.asl.on{background:var(--live)}
+@media (max-width:1100px){.tccols{grid-template-columns:1fr}}
+</style>
+
+<div class="app">
+  <header>
+    <h1>The Workbench</h1>
+    <p>You start with one part: the NAND gate. Everything else you will have to build, and whatever you build becomes a part you can use.</p>
+  </header>
+  <aside class="col left">
+    <div class="stations" id="stations"></div>
+    <h2>Challenges</h2>
+    <ol class="steps" id="steps"></ol>
+    <div class="bin"><h2>Your parts bin</h2><div id="bin"></div></div>
+    <button class="btn" id="reset" style="margin-top:14px;font-size:12px">Clear all progress</button>
+  </aside>
+  <main class="stage">
+    <div id="editWrap" style="display:flex;flex-direction:column;gap:8px">
+      <div class="toolbar" id="palette"></div>
+      <svg id="board" viewBox="0 0 900 520" aria-label="Circuit board"></svg>
+      <div class="toolbar">
+        <button class="btn" id="del" disabled>Delete selected</button>
+        <button class="btn" id="clear">Clear board</button>
+        <button class="btn dark" id="testall">Test every input</button>
+      </div>
+    </div>
+    <div id="raceWrap">
+      <div class="toolbar">
+        <span style="font-size:13px;color:var(--muted)">Try:</span>
+        <button class="btn" data-preset="1,1">1 + 1</button>
+        <button class="btn" data-preset="15,1">15 + 1</button>
+        <button class="btn" data-preset="255,1">255 + 1</button>
+        <button class="btn" data-preset="rand">Random</button>
+        <button class="btn" id="subBtn" aria-pressed="false">Subtract: off</button>
+      </div>
+      <svg id="race" viewBox="0 0 900 420" aria-label="Eight-bit ripple carry adder"></svg>
+      <div class="readout" id="readout"></div>
+      <div class="trail" id="trail"></div>
+    </div>
+    <div id="counterWrap">
+      <div class="toolbar">
+        <button class="btn" id="cmode">Register built from: transparent latches</button>
+        <label style="margin-left:0">Clock: fast <input type="range" id="chalf" min="2" max="80" value="40"> slow</label>
+        <button class="btn" id="cpause">Pause</button>
+        <button class="btn" id="cstep">One clock cycle</button>
+      </div>
+      <svg id="counter" viewBox="0 0 900 380" aria-label="Clocked counter"></svg>
+      <div class="readout" id="cread"></div>
+      <div class="trail" id="ctrail"></div>
+    </div>
+    <div id="ramWrap">
+      <div class="toolbar"><button class="btn dark" id="mwrite">Write</button></div>
+      <svg id="ram" viewBox="0 0 900 400" aria-label="Four-word memory"></svg>
+      <div class="readout" id="mread"></div>
+    </div>
+    <div id="cpuWrap">
+      <div class="toolbar">
+        <button class="btn dark" id="cstepb">Next step</button>
+        <button class="btn" id="cinstr">Finish this instruction</button>
+        <button class="btn" id="crun">Run</button>
+        <button class="btn" id="creset">Reset</button>
+        <button class="btn" id="cmine" disabled>Control: working reference</button>
+      </div>
+      <svg id="cpu" viewBox="0 0 900 500" aria-label="Processor schematic"></svg>
+      <div class="cword" id="cword"></div>
+      <div class="csay" id="csay"></div>
+      <div class="cpucols">
+        <div>
+          <select id="cex" class="btn" style="width:100%;margin-bottom:6px"></select>
+          <textarea id="cprog" spellcheck="false" aria-label="Program"></textarea>
+          <button class="btn" id="cload" style="margin-top:6px">Load program into memory</button>
+          <div id="cerr" style="color:var(--bad);font-size:13px"></div>
+        </div>
+        <table id="cmem"></table>
+      </div>
+    </div>
+    <div id="romWrap">
+      <div class="toolbar" id="rlevels"></div>
+      <p id="rsay" style="margin:0;max-width:80ch"></p>
+      <div class="gridwrap"><table id="rgrid"></table></div>
+      <div class="toolbar">
+        <button class="btn dark" id="rtest">Test this level</button>
+        <button class="btn" id="rwatch">Watch my ROM run</button>
+      </div>
+      <div id="rreport"></div>
+      <div id="rexport" style="display:none" class="win">
+        <b>Your ROM is complete. Take it to the bench.</b>
+        <div class="toolbar" style="margin-top:6px">
+          <button class="btn" id="rhi">Download chip 1 image</button>
+          <button class="btn" id="rlo">Download chip 2 image</button>
+          <button class="btn" id="rcode">Show as code</button>
+        </div>
+        <textarea id="rtext" style="display:none;width:100%;height:120px;margin-top:6px;font-family:JetBrains Mono,monospace;font-size:11px"></textarea>
+      </div>
+      <div class="legend" id="rlegend"></div>
+    </div>
+    <div id="isaWrap">
+      <div class="toolbar">
+        <button class="btn" id="iless">◀ Fewer instruction bits</button>
+        <button class="btn" id="imore">More instruction bits ▶</button>
+        <button class="btn" id="itwo">Use two bytes per instruction</button>
+      </div>
+      <svg id="isa" viewBox="0 0 900 380" aria-label="Instruction format"></svg>
+      <div class="readout" id="ishow"></div>
+      <h2 style="margin:4px 0 0">Instructions you keep</h2>
+      <div class="toolbar" id="iops"></div>
+      <h2 style="margin:4px 0 0">Jobs your machine must run</h2>
+      <div class="jobs" id="ijobs"></div>
+    </div>
+    <div id="handWrap">
+      <div class="toolbar" id="hsel"></div>
+      <div class="gridwrap"><table id="hrows"></table></div>
+      <div class="legend" id="hops"></div>
+      <div class="toolbar"><button class="btn dark" id="hrun" disabled>Run it on the processor</button></div>
+    </div>
+    <div id="faultWrap">
+      <div class="toolbar" id="flevels"></div>
+      <p id="freport" style="margin:0;max-width:80ch"></p>
+      <div class="fcols">
+        <div class="fpanel" id="fpanel"></div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="toolbar">
+            <button class="btn dark" id="fstep">Press clock button</button>
+            <button class="btn" id="frun">Run the whole program</button>
+            <button class="btn" id="freset">Power off and on</button>
+          </div>
+          <div class="toolbar"><select id="fprobe" class="btn" style="max-width:320px"></select><button class="btn" id="fadd">Add probe to analyser</button></div>
+          <div class="toolbar"><select id="faccuse" class="btn" style="max-width:360px"></select><button class="btn dark" id="fgo">Replace it</button></div>
+          <div id="fverdict"></div>
+        </div>
+      </div>
+      <svg id="fscope" viewBox="0 0 900 200" aria-label="Logic analyser"></svg>
+    </div>
+    <div id="bootWrap">
+      <div class="toolbar">
+        <button class="btn" id="kfit">ROM chip: not fitted</button>
+        <button class="btn dark" id="kpower">Power off and on</button>
+        <button class="btn" id="kstep">Step one instruction</button>
+        <button class="btn" id="krun">Run</button>
+      </div>
+      <svg id="boot" viewBox="0 0 900 490" aria-label="Memory map"></svg>
+      <div class="readout" id="kread"></div>
+      <div class="csay" id="knote"></div>
+      <div class="cpucols" style="grid-template-columns:1fr 1fr">
+        <div><h2>Boot monitor (goes into the ROM)</h2>
+          <textarea id="ksrc" wrap="off" spellcheck="false" style="height:380px" aria-label="Boot monitor source"></textarea>
+          <button class="btn dark" id="kburn" style="margin-top:6px">Burn into the ROM</button>
+          <div id="kerr" style="color:var(--bad);font-size:13px"></div></div>
+        <div><h2>The program on the tape</h2>
+          <pre id="ktape" style="font-family:JetBrains Mono,monospace;font-size:13px;background:#fff;border:1px solid var(--line);border-radius:5px;padding:8px;margin:0"></pre>
+          <p style="font-size:13px;color:var(--muted)">It should display 5, 4, 3, 2, 1, 0 and halt. Labels like <b>loop</b> are names for addresses; the assembler works out the numbers, which is the first job an assembler ever had.</p></div>
+      </div>
+    </div>
+    <div id="compileWrap">
+      <div class="toolbar" id="tctasks"></div>
+      <p id="tcsay" style="margin:0;max-width:80ch"></p>
+      <div class="tccols">
+        <div><h2>Your program</h2><textarea id="tcsrc" spellcheck="false" wrap="off" aria-label="Program source"></textarea><div id="tcerr" style="color:var(--bad);font-size:13px"></div></div>
+        <div><h2>What it means: the tree</h2><div id="tctree"></div></div>
+        <div><h2>What the machine gets</h2><div id="tcasm"></div></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn dark" id="tcrun">Run</button>
+        <button class="btn" id="tcopt">Optimise: off</button>
+        <button class="btn" id="tcboot">Boot it on mark 2</button>
+      </div>
+      <div class="readout" id="tcread"></div>
+      <div class="trail"><span style="color:var(--muted)">The bytes, exactly as they go down the tape:</span><br><span id="tcbytes"></span></div>
+    </div>
+    <div id="capWrap">
+      <div class="toolbar" id="captabs"></div>
+      <div class="toolbar" id="capcrumb"></div>
+      <div id="capbody"></div>
+    </div>
+    <div class="toolbar"><label style="margin-left:0">Signal speed <input type="range" id="speed" min="30" max="600" value="200" style="direction:rtl"></label></div>
+    <div class="status" id="status"></div>
+  </main>
+  <aside class="col side">
+    <div class="task" id="task"></div>
+    <table id="tt"></table>
+    <button class="btn" id="hintbtn">Give me a hint</button>
+    <div id="hint"></div>
+    <div id="win"></div>
+    <div class="bench" id="bench"></div>
+  </aside>
+</div>
+<script>
+// Progress is saved with window.storage when it exists (inside Claude) and with the browser's localStorage everywhere else.
+if(!window.storage){ window.storage={
+  async get(k){ const v=localStorage.getItem('swd:'+k); if(v===null) throw new Error('not found'); return {key:k,value:v}; },
+  async set(k,v){ localStorage.setItem('swd:'+k,v); return {key:k,value:v}; },
+  async delete(k){ localStorage.removeItem('swd:'+k); return {key:k,deleted:true}; } }; }
+// ================= Challenge definitions =================
+const HC00 = {name:'74HC00', w:7,
+  bottom:[[1,'1A'],[2,'1B'],[3,'1Y'],[4,'2A'],[5,'2B'],[6,'2Y'],[7,'GND']],
+  top:[[14,'VCC'],[13,'4B'],[12,'4A'],[11,'4Y'],[10,'3B'],[9,'3A'],[8,'3Y']]};
+const HC283 = {name:'74HC283', w:8,
+  bottom:[[1,'S2'],[2,'B2'],[3,'A2'],[4,'S1'],[5,'A1'],[6,'B1'],[7,'C0'],[8,'GND']],
+  top:[[16,'VCC'],[15,'B3'],[14,'A3'],[13,'S3'],[12,'A4'],[11,'B4'],[10,'S4'],[9,'C4']]};
+const POWER = 'Power pin to +5 V, ground pin to ground. Every unused input goes to ground too; a floating CMOS input picks up noise and can make the chip run hot.';
+
+const CH = [
+ {id:'NOT', st:'gates', ins:['A'], outs:['Y'], f:a=>[!a], best:1, req:null,
+  text:'Make the lamp show the <b>opposite</b> of A.',
+  hints:['A NAND outputs 0 only when both of its inputs are 1. Is there a way to make sure its two inputs always agree?',
+         'Wire A to both inputs of one NAND. Now it only ever sees 00 or 11.'],
+  why:'Tying both inputs together means the NAND only ever meets two rows of its truth table, 00 and 11, and on exactly those two rows it behaves as an inverter. You did not add anything new; you restricted what the gate is allowed to see.',
+  chip:HC00, bench:'One 74HC00 holds four NAND gates. Tie pins 1 and 2 together, bring your switch in, and take pin 3 to an LED through a 330 Ω resistor. You have used a quarter of a chip. Real boards use the 74HC04, six inverters in one package, because this job is so common.'},
+ {id:'AND', st:'gates', ins:['A','B'], outs:['Y'], f:(a,b)=>[a&&b], best:2, req:'NOT',
+  text:'Light the lamp only when A <b>and</b> B are both on.',
+  hints:['NAND means “not AND”. What would undo the “not”?','Feed A and B into a NAND, then send its output through your NOT.'],
+  why:'NAND is AND with an inverter bolted on. Inverting twice cancels, so NAND followed by NOT is plain AND. Notice that you used your own NOT as a single block: that is abstraction, and you earned it.',
+  chip:HC00, bench:'Two of the four NANDs on one 74HC00. The dedicated chip is the 74HC08 (four ANDs).'},
+ {id:'OR', st:'gates', ins:['A','B'], outs:['Y'], f:(a,b)=>[a||b], best:3, req:'AND',
+  text:'Light the lamp when A <b>or</b> B (or both) is on.',
+  hints:['OR is 0 in only one case: when both inputs are 0. NAND is 1 in every case except when both inputs are 1. Can you make those the same case?','Invert A and invert B, then NAND the two inverted signals.'],
+  why:'Flip both inputs and “both are 1” becomes “both were 0”. NAND is 0 only in that case, which is exactly OR. This trick, swapping AND for OR by inverting everything, is De Morgan’s law, and circuit designers use it constantly.',
+  chip:HC00, bench:'Three NANDs, so most of a 74HC00. The dedicated chip is the 74HC32.'},
+ {id:'XOR', st:'gates', ins:['A','B'], outs:['Y'], f:(a,b)=>[a!==b], best:4, req:'OR',
+  text:'Light the lamp when A and B are <b>different</b>. This is the hard one.',
+  hints:['Say it in words first: “A or B, but not both”. You own OR, AND and NOT.','That works: (A OR B) AND NOT(A AND B). Now try for four NANDs.',
+         'The four-NAND version: M = NAND(A,B). Then NAND(A,M) and NAND(B,M). Then NAND those two together.'],
+  why:'XOR asks “are these different?”, which is the question at the heart of addition: 1 + 1 gives a sum bit of 0, and 1 + 0 gives 1. The adder station is built around the gate you just made.',
+  chip:HC00, bench:'The four-NAND XOR uses exactly one whole 74HC00. The dedicated chip is the 74HC86, and you will meet it again in the adder’s subtract row.'},
+ {id:'MUX', st:'gates', ins:['A','B','S'], outs:['Y'], f:(a,b,s)=>[s?b:a], best:4, req:'XOR',
+  text:'Build a <b>selector</b>: when S is off, the lamp copies A; when S is on, it copies B.',
+  hints:['Break it in two: “A and not S” passes A only when S is 0. What passes B only when S is 1?','(A AND NOT S) OR (B AND S). Then see how many of those gates collapse into NANDs.'],
+  why:'This is a switch controlled by a signal instead of a finger. A processor is full of them: they decide which register feeds the adder, and which result gets stored. The control logic of the processor chapter is mostly a set of wires telling selectors like this one what to choose.',
+  chip:HC00, bench:'The 74HC157 contains four of these selectors in one chip. On the Bench Computer, selectors like this route data onto the bus.'},
+
+ {id:'HALF', st:'adder', ins:['A','B'], outs:['S','C'], f:(a,b)=>[a!==b, a&&b], best:5, req:'XOR',
+  text:'Add two single bits. <b>S</b> is the sum bit, <b>C</b> is the carry. 1 + 1 = 10 in binary: sum 0, carry 1.',
+  hints:['Write out the four additions: 0+0, 0+1, 1+0, 1+1. Now look at the S column alone. Which of your parts has that truth table?','Look at the C column alone. It is 1 in one row only. Which part is that?',
+         'S is XOR, C is AND, both fed from A and B. For the five-NAND version: the first NAND inside your XOR already computes NAND(A,B); invert it and you have the carry for one extra gate.'],
+  why:'Addition split cleanly into two questions: “are the bits different?” (the sum) and “are they both 1?” (the carry). Nothing about the circuit knows it is doing arithmetic. It only answers those two logical questions, and arithmetic is what we call the result.',
+  chip:HC00, bench:'A 74HC86 (XOR) and a 74HC08 (AND), or five NANDs across two 74HC00s. You will not build this one on its own on the bench; the next part does it better.'},
+ {id:'FULL', st:'adder', ins:['A','B','Cin'], outs:['S','Cout'], f:(a,b,c)=>{const n=a+b+c; return [n&1, n>>1];}, best:9, req:'HALF',
+  text:'A column of long addition has <b>three</b> inputs: two digits and the carry coming in from the column on the right. Add all three.',
+  hints:['Adding three bits is adding two, then adding the third to the result. You own a part that adds two.',
+         'First HALF adds A and B. Second HALF adds that sum to Cin. Its S is the final sum.',
+         'You now have two carries, one from each HALF. They can never both be 1 at once (try to find a case). So combining them with OR gives Cout.'],
+  why:'This is the exact procedure you learned at school for one column, mechanised: add the digits, add the carry, pass any carry left. Eight of these side by side, each passing its carry to the next, is an 8-bit adder. That is the next challenge, and it hides a surprise about time.',
+  chip:HC283, bench:'The 74HC283 holds four full adders. A1/B1 is the lowest bit, C0 is the carry in, C4 is the carry out. Two of these, with C4 of the first wired to C0 of the second, make the 8-bit adder of the next challenge. (Inside, the 283 cheats a little: it computes carries with extra “look-ahead” logic so it does not have to wait for the ripple you are about to watch.)'},
+ {id:'RACE', st:'adder', race:true, req:'FULL', ins:[], outs:[],
+  text:'Your FULL adder, copied eight times. Each carry out feeds the next carry in. Pick two numbers and <b>watch the answer arrive</b>. The trail below records every value the output passes through before it settles.',
+  hints:['Compare 1 + 1 with 255 + 1. Both answers are short. Why does one take so much longer?',
+         'In 255 + 1 every column produces a carry, and each column cannot know its final answer until the column to its right has finished. The carry has to crawl across all eight.',
+         'Switch Subtract on and try 5 − 7. Then read the answer as a signed number.'],
+  why:'Look at the trail: for a while the adder confidently displays wrong answers. It has no idea it is not finished. The worst-case wait, a carry rippling across every column, sets how long anything that uses this adder must wait before trusting it. The next station, the clock, exists to enforce exactly that wait.',
+  chip:HC283, bench:'Two 74HC283s: A and B bits 1–4 to the first, 5–8 to the second, C4 of the first to C0 of the second. For subtraction, put a 74HC86 on the eight B lines: one input of each XOR is a B bit, the other is a single SUB switch, and the same SUB switch goes to C0 of the first 283. Sixteen DIP switches in, nine LEDs out.'},
+];
+const FREE = {id:'FREE', st:'any', ins:['A','B','C'], outs:['Y','Z'], f:null, text:'Free building. Any of your parts, three inputs, two lamps, no target.', hints:['No hints in the sandbox. Try wiring two NANDs so each output feeds the other and see what the lamps do. The memory station is waiting for you there.']};
+const STATIONS = [{id:'gates',name:'Gates',req:null},{id:'adder',name:'Adder',req:'XOR'}];
+const isView = c => !!(c.race||c.view);
+
+// ================= State & storage =================
+const $ = s=>document.querySelector(s);
+const board = $('#board'), raceSvg = $('#race');
+let P = {solved:{}, chips:{}, circuits:{}};
+let S = {cur:'NOT', station:'gates', nodes:[], wires:[], out:{}, q:{}, sel:null, pending:null, drag:null, mouse:null,
+         observed:{}, stable:0, auto:null, hintN:0, nextId:1};
+const ch = id => CH.find(c=>c.id===id) || FREE;
+const cur = () => ch(S.cur);
+const solved = id => !id || !!P.solved[id];
+
+function normalise(){
+  P.solved ||= {}; P.chips ||= {}; P.circuits ||= {};
+  for(const c of Object.values(P.chips)){
+    if(!c.outs) c.outs=['Y'];
+    if(typeof c.table[0]==='number') c.table=c.table.map(x=>[x]);
+    if(!c.depths) c.depths=[c.depth||1];
+  }
+  for(const k in P.circuits) for(const w of P.circuits[k].wires){ if(w.from.pin==null) w.from.pin=0; if(w.to.node==='out') w.to.node='out0'; }
+  for(const k in P.circuits) for(const n of P.circuits[k].nodes) if(n.id==='out'){ n.id='out0'; }
+}
+async function load(){
+  try{ const r=await window.storage.get('workbench-v1'); if(r) P=JSON.parse(r.value); }catch(e){}
+  normalise();
+}
+let saveT;
+function save(){
+  if(!isView(cur())) P.circuits[S.cur]={nodes:S.nodes, wires:S.wires};
+  clearTimeout(saveT);
+  saveT=setTimeout(async()=>{ try{ await window.storage.set('workbench-v1', JSON.stringify(P), false);}catch(e){} },300);
+}
+
+// ================= Geometry =================
+function chipOf(n){ return P.chips[n.type]; }
+function nIns(n){ return n.type==='IN'?0 : n.type==='OUT'?1 : n.type==='NAND'?2 : chipOf(n).ins.length; }
+function nOuts(n){ return n.type==='OUT'?0 : (n.type==='IN'||n.type==='NAND')?1 : chipOf(n).outs.length; }
+function dims(n){
+  if(n.type==='IN') return {w:54,h:34};
+  if(n.type==='OUT') return {w:44,h:44};
+  if(n.type==='NAND') return {w:78,h:52};
+  return {w:96,h:Math.max(52,Math.max(nIns(n),nOuts(n))*24+14)};
+}
+function pinPos(n,io,i){
+  const d=dims(n);
+  if(io==='o'){ const k=nOuts(n); return {x:n.x+d.w+(n.type==='NAND'?22:12), y:n.y+d.h*(i+1)/(k+1)}; }
+  if(n.type==='OUT') return {x:n.x, y:n.y+d.h/2};
+  const k=nIns(n); return {x:n.x-12, y:n.y+d.h*(i+1)/(k+1)};
+}
+
+// ================= Simulation =================
+// Every node's output is an array (one entry per output pin). Each tick, every
+// gate recomputes from its inputs as they were at the previous tick: that is
+// what makes signals visibly travel. A chip delays each output by its measured depth.
+const WIDX=new WeakMap();
+function wireIndex(wires){
+  let e=WIDX.get(wires);
+  if(!e||e.len!==wires.length){ e={len:wires.length,m:{}}; for(const w of wires)(e.m[w.to.node] ||= []).push(w); WIDX.set(wires,e); }
+  return e.m;
+}
+function inVals(n, wires, out){
+  const v=Array(nIns(n)).fill(0);
+  for(const w of (wireIndex(wires)[n.id]||[])) v[w.to.pin]=((out[w.from.node]||[])[w.from.pin||0])?1:0;
+  return v;
+}
+function step(nodes, wires, out, q){
+  const nxt={}; let changed=false;
+  for(const n of nodes){
+    if(n.type==='IN'){ nxt[n.id]=[n.v?1:0]; continue; }
+    const v=inVals(n,wires,out);
+    if(n.type==='OUT'){ nxt[n.id]=[v[0]]; continue; }
+    let t;
+    if(n.type==='NAND') t=[(v[0]&&v[1])?0:1];
+    else {
+      const c=chipOf(n);
+      if(c.circuit) t=stepCircuitChip(n,c,v,q);
+      else {
+        let idx=0; v.forEach(b=>idx=idx*2+b);
+        const target=c.table[idx], prev=out[n.id]||c.outs.map(()=>0);
+        const qs = q[n.id] ||= c.depths.map((d,j)=>Array(Math.max(0,d-1)).fill(prev[j]));
+        t=target.map((x,j)=>{ if(!qs[j].length) return x; qs[j].push(x); return qs[j].shift(); });
+      }
+    }
+    // Real gates never switch at exactly the same instant. When two gates in a loop keep
+    // flipping each other in lockstep, let chance break the tie, as it does in silicon.
+    const old=out[n.id], fk='#'+n.id;
+    if(old&&String(old)!==String(t)){ q[fk]=(q[fk]||0)+1; if(q[fk]>3&&Math.random()<0.5){ t=old; q[fk]=0; } } else q[fk]=0;
+    nxt[n.id]=t;
+  }
+  for(const k in nxt){ if(String(out[k]||'')!==String(nxt[k])) changed=true; out[k]=nxt[k]; }
+  return changed;
+}
+function nandCount(nodes){ return nodes.reduce((s,n)=>s+(n.type==='NAND'?1:(chipOf(n)?chipOf(n).nand:0)),0); }
+function depthTo(nodes,wires,outId){
+  const memo={}, busy={};
+  const d=(id,pin)=>{
+    const key=id+':'+pin; if(memo[key]!=null) return memo[key]; if(busy[key]) return 0; busy[key]=1;
+    const n=nodes.find(x=>x.id===id);
+    const own = n.type==='NAND'?1 : (chipOf(n)?chipOf(n).depths[pin]:0);
+    let m=0; for(const w of wires) if(w.to.node===id) m=Math.max(m,d(w.from.node,w.from.pin||0));
+    busy[key]=0; return memo[key]=m+own;
+  };
+  return Math.max(1,d(outId,0));
+}
+
+// ================= Board setup =================
+function ioNodes(c){
+  const k=c.ins.length, m=c.outs.length;
+  const ins=c.ins.map((l,i)=>({id:'in'+i,type:'IN',label:l,v:0,x:24,y:k===1?240:100+i*(320/(k-1))}));
+  const outs=c.outs.map((l,i)=>({id:'out'+i,type:'OUT',label:l,x:830,y:m===1?238:150+i*(220/(m-1))}));
+  return [...ins,...outs];
+}
+function paletteParts(){ return ['NAND',...Object.keys(P.chips).filter(n=>n!==S.cur)]; }
+function loadChallenge(id){
+  S.cur=id; const c=cur();
+  if(c.st!=='any') S.station=c.st;
+  S.sel=null; S.pending=null; S.observed={}; S.stable=0; S.auto=null; S.hintN=0; S.out={}; S.q={};
+  $('#hint').innerHTML='';
+  if(c.race){ setupRace(); renderAll(); return; }
+  if(c.view==='counter'){ setupCounter(); renderAll(); return; }
+  if(c.view==='ram'){ setupRam(); renderAll(); return; }
+  if(c.view==='cpu'){ setupCpu(); renderAll(); return; }
+  if(c.view==='isa'||c.view==='hand'){ renderAll(); return; }
+  if(c.view==='boot'){ if(!$('#ksrc').value) $('#ksrc').value=P.bootSrc||MONITOR; if(P.bootRom&&!K.burned){ K.rom=P.bootRom.slice(); K.romFitted=true; K.burned=true; } powerOn(); if(K.custom) K.note='Your compiled program is on the tape. Press Run: the monitor in ROM will load it and start it.'; renderAll(); return; }
+  if(c.view==='capstone'){ CAP.path=[]; renderAll(); return; }
+  if(c.view==='compile'){ if(!TC.src){ TC.src=TASKS[TC.task].src; $('#tcsrc').value=TC.src; } compileNow(); renderAll(); return; }
+  if(c.view==='fault'){ FT.level=Math.min(P.faultLevel||0,FAULTS.length-1); FT.tries=0; FT.solvedMsg=''; faultReset(); renderAll(); return; }
+  if(c.view==='rom'){ P.rom ||= emptyRom(); U.showLevel=P.romLevel||0; $('#rreport').innerHTML=''; renderAll(); return; }
+  const saved=P.circuits[id];
+  if(saved){ S.nodes=JSON.parse(JSON.stringify(saved.nodes)); S.wires=JSON.parse(JSON.stringify(saved.wires)); S.nodes.forEach(n=>{if(n.type==='IN')n.v=0;}); }
+  else { S.nodes=ioNodes(c); S.wires=[]; }
+  const ok=new Set(paletteParts());
+  const bad=new Set(S.nodes.filter(n=>!['IN','OUT'].includes(n.type)&&!ok.has(n.type)).map(n=>n.id));
+  S.nodes=S.nodes.filter(n=>!bad.has(n.id)); S.wires=S.wires.filter(w=>!bad.has(w.from.node)&&!bad.has(w.to.node));
+  S.nextId=1+Math.max(0,...S.nodes.map(n=>+String(n.id).replace(/\D/g,'')||0));
+  renderAll();
+}
+function edited(){ S.seqGot=[]; S.observed={}; S.q={}; S.stable=0; save(); renderSide(); }
+
+// ================= Board rendering =================
+const col=v=>v?'var(--live)':'var(--wire)';
+const GLOW='<defs><filter id="glow"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+function wirePath(a,b){ const dx=Math.max(40,Math.abs(b.x-a.x)/2); return `M${a.x},${a.y} C${a.x+dx},${a.y} ${b.x-dx},${b.y} ${b.x},${b.y}`; }
+function renderBoard(){
+  let h=GLOW;
+  for(const w of S.wires){
+    const a=S.nodes.find(n=>n.id===w.from.node), b=S.nodes.find(n=>n.id===w.to.node); if(!a||!b) continue;
+    const v=(S.out[a.id]||[])[w.from.pin||0]; const p=wirePath(pinPos(a,'o',w.from.pin||0),pinPos(b,'i',w.to.pin));
+    h+=`<path d="${p}" stroke="transparent" stroke-width="14" fill="none" data-wire="${w.id}" style="cursor:pointer"/>`;
+    h+=`<path d="${p}" stroke="${col(v)}" stroke-width="${S.sel===w.id?5:3}" fill="none" ${v?'filter="url(#glow)"':''} pointer-events="none" ${S.sel===w.id?'stroke-dasharray="7 4"':''}/>`;
+  }
+  if(S.pending&&S.mouse){
+    const n=S.nodes.find(x=>x.id===S.pending.node); const p=pinPos(n,S.pending.io,S.pending.pin);
+    h+=`<path d="${S.pending.io==='o'?wirePath(p,S.mouse):wirePath(S.mouse,p)}" stroke="var(--ink)" stroke-width="2" stroke-dasharray="5 4" fill="none" pointer-events="none"/>`;
+  }
+  for(const n of S.nodes){
+    const d=dims(n), v=(S.out[n.id]||[])[0], sel=S.sel===n.id;
+    h+=`<g data-node="${n.id}" style="cursor:${n.type==='IN'?'pointer':'grab'}">`;
+    if(n.type==='IN'){
+      h+=`<rect x="${n.x}" y="${n.y}" width="${d.w}" height="${d.h}" rx="17" fill="${n.v?'var(--ink)':'#fff'}" stroke="var(--ink)" stroke-width="2" data-switch="${n.id}"/>`;
+      h+=`<circle cx="${n.x+(n.v?d.w-17:17)}" cy="${n.y+17}" r="12" fill="${n.v?'var(--live)':'#C9CFC9'}" pointer-events="none"/>`;
+      h+=`<text x="${n.x+d.w/2}" y="${n.y-8}" text-anchor="middle" font-size="16" font-weight="600" fill="var(--ink)">${n.label} = ${n.v?1:0}</text>`;
+    } else if(n.type==='OUT'){
+      h+=`<circle cx="${n.x+22}" cy="${n.y+22}" r="21" fill="${v?'var(--live)':'#DADFD9'}" stroke="var(--ink)" stroke-width="2" ${v?'filter="url(#glow)"':''}/>`;
+      h+=`<text x="${n.x+22}" y="${n.y+66}" text-anchor="middle" font-size="16" font-weight="600" fill="var(--ink)">${n.label} ${v?1:0}</text>`;
+    } else if(n.type==='NAND'){
+      const x=n.x,y=n.y,w=d.w-26,hh=d.h;
+      h+=`<path d="M${x},${y} H${x+w} A${hh/2},${hh/2} 0 0 1 ${x+w},${y+hh} H${x} Z" fill="#fff" stroke="${sel?'var(--live)':'var(--ink)'}" stroke-width="${sel?3:2}"/>`;
+      h+=`<circle cx="${x+w+hh/2+5}" cy="${y+hh/2}" r="5" fill="#fff" stroke="var(--ink)" stroke-width="2"/>`;
+      h+=`<text x="${x+w/2+6}" y="${y+hh/2+5}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)" pointer-events="none">NAND</text>`;
+    } else {
+      const c=chipOf(n);
+      h+=`<rect x="${n.x}" y="${n.y}" width="${d.w}" height="${d.h}" rx="3" fill="var(--chip)" stroke="${sel?'var(--live)':'var(--chip)'}" stroke-width="3"/>`;
+      h+=`<path d="M${n.x+d.w/2-7},${n.y} a7,7 0 0 0 14,0" fill="#FBFCF9"/>`;
+      h+=`<text x="${n.x+d.w/2}" y="${n.y+d.h/2+5}" text-anchor="middle" font-size="14" font-weight="700" fill="#fff" pointer-events="none">${n.type}</text>`;
+      c.ins.forEach((l,i)=>{const p=pinPos(n,'i',i); h+=`<text x="${n.x+5}" y="${p.y+4}" font-size="10" fill="#aaa" pointer-events="none">${l}</text>`;});
+      c.outs.forEach((l,i)=>{const p=pinPos(n,'o',i); h+=`<text x="${n.x+d.w-5}" y="${p.y+4}" font-size="10" fill="#aaa" text-anchor="end" pointer-events="none">${l}</text>`;});
+    }
+    h+='</g>';
+    const iv=inVals(n,S.wires,S.out);
+    for(let i=0;i<nIns(n);i++){
+      const p=pinPos(n,'i',i), conn=S.wires.some(w=>w.to.node===n.id&&w.to.pin===i);
+      const pend=S.pending&&S.pending.node===n.id&&S.pending.io==='i'&&S.pending.pin===i;
+      if(n.type!=='OUT') h+=`<line x1="${p.x}" y1="${p.y}" x2="${p.x+12}" y2="${p.y}" stroke="var(--ink)" stroke-width="2"/>`;
+      h+=`<circle cx="${p.x}" cy="${p.y}" r="${pend?8:6}" fill="${conn?col(iv[i]):'#fff'}" stroke="${conn?'var(--ink)':'var(--bad)'}" stroke-width="2" data-pin="${n.id}:i:${i}" style="cursor:crosshair"/>`;
+    }
+    for(let j=0;j<nOuts(n);j++){
+      const p=pinPos(n,'o',j), pend=S.pending&&S.pending.node===n.id&&S.pending.io==='o'&&S.pending.pin===j;
+      h+=`<line x1="${p.x-12}" y1="${p.y}" x2="${p.x}" y2="${p.y}" stroke="var(--ink)" stroke-width="2"/>`;
+      h+=`<circle cx="${p.x}" cy="${p.y}" r="${pend?8:6}" fill="${col((S.out[n.id]||[])[j])}" stroke="var(--ink)" stroke-width="2" data-pin="${n.id}:o:${j}" style="cursor:crosshair"/>`;
+    }
+  }
+  board.innerHTML=h;
+}
+
+// ================= Side panels =================
+function renderStations(){
+  $('#stations').innerHTML=STATIONS.map(s=>`<button data-st="${s.id}" aria-pressed="${S.station===s.id}" ${solved(s.req)?'':'disabled title="Build XOR first"'}>${s.name}</button>`).join('');
+}
+function renderSteps(){
+  const list=[...CH.filter(c=>c.st===S.station),FREE];
+  $('#steps').innerHTML=list.map((c,i)=>{
+    const locked=c.id!=='FREE'&&!solved(c.req);
+    const name=c.id==='FREE'?'Sandbox':(i+1)+'. '+(c.race?'The ripple race':c.title||'Build '+c.id);
+    const tag=P.solved[c.id]?`<span class="done">✓${P.solved[c.id].nand?' '+P.solved[c.id].nand+' NAND':''}</span>`:(locked?'<span class="tag">locked</span>':'');
+    return `<li><button data-ch="${c.id}" aria-current="${S.cur===c.id}" ${locked?'disabled':''}>${name}${tag}</button></li>`;
+  }).join('');
+  const chips=Object.values(P.chips);
+  $('#bin').innerHTML=`<div class="part"><span>NAND</span><span>given</span></div>`+
+    chips.map(c=>`<div class="part"><span>${c.name}</span><span>${c.nand} NAND, delay ${Math.max(...c.depths)}</span></div>`).join('')+
+    (chips.length?'':'<p style="font-size:13px;color:var(--muted);margin:6px 0 0">Empty. Solve a challenge and its circuit lands here as a part.</p>');
+  $('#palette').innerHTML='<span style="font-size:13px;color:var(--muted)">Add a part:</span>'+paletteParts().map(a=>`<button class="btn" data-add="${a}">${a}</button>`).join('');
+}
+function bits(r,k){ return [...Array(k)].map((_,i)=>(r>>(k-1-i))&1); }
+function renderSide(){
+  const c=cur();
+  $('#task').innerHTML=`<h2>${c.id==='FREE'?'Sandbox':c.race?'The ripple race':c.title||'Build '+c.id}</h2><p style="margin:0 0 4px">${c.text}</p>`;
+  $('#hintbtn').style.display=S.hintN<c.hints.length?'':'none';
+  if(isView(c)){ $('#tt').innerHTML=''; renderWin(); renderBench(); return; }
+  $('#testall').textContent=c.seq?'Run the test sequence':'Test every input';
+  if(c.seq){ renderSeqTable(c); }
+  else {
+  const k=c.ins.length, m=c.outs.length;
+  let curIdx=0; S.nodes.filter(n=>n.type==='IN').forEach(n=>curIdx=curIdx*2+(n.v?1:0));
+  let t='<tr>'+c.ins.map(l=>`<th>${l}</th>`).join('')+(c.f?`<th>want ${c.outs.join(' ')}</th>`:'')+`<th>got ${c.outs.join(' ')}</th>`+(c.f?'<th></th>':'')+'</tr>';
+  for(let r=0;r<(1<<k);r++){
+    const b=bits(r,k), want=c.f?c.f(...b).map(x=>x?1:0).join(' '):null, got=S.observed[r];
+    const mark=got==null?'':(got===want?'<span class="ok">✓</span>':'<span class="no">✗</span>');
+    t+=`<tr class="${r===curIdx?'now':''}">`+b.map(x=>`<td>${x}</td>`).join('')+(c.f?`<td>${want}</td>`:'')+`<td>${got==null?'·':got}</td>`+(c.f?`<td>${mark}</td>`:'')+'</tr>';
+  }
+  $('#tt').innerHTML=t;
+  }
+  const floating=S.nodes.reduce((s,n)=>{for(let i=0;i<nIns(n);i++) if(!S.wires.some(w=>w.to.node===n.id&&w.to.pin===i)) s++; return s;},0);
+  const nc=nandCount(S.nodes);
+  $('#status').textContent=(S.pending?'Now click a pin of the opposite kind to finish the wire. Click empty board to cancel. ':'Click a pin, then another pin, to wire them. Click a switch to flip it. ')
+    +(S.stable<settleWindow(S.nodes)?' Signals still moving…':' Settled.')+(floating?` ${floating} unconnected input${floating>1?'s':''} (red) read as 0.`:'')
+    +`  Circuit uses ${nc} NAND${nc===1?'':'s'}.`;
+  $('#del').disabled=!S.sel||String(S.sel).startsWith('in')||String(S.sel).startsWith('out');
+  renderWin(); renderBench();
+}
+function renderWin(){
+  const c=cur(), s=P.solved[c.id];
+  if(!s){ $('#win').innerHTML=''; return; }
+  if(c.view){ $('#win').innerHTML=`<div class="win"><b>${c.winTitle}</b><p style="margin:8px 0 0">${c.why}</p></div>`; return; }
+  if(c.race){ $('#win').innerHTML=`<div class="win"><b>You found the worst case.</b><p style="margin:8px 0 0">${c.why}</p></div>`; return; }
+  const beat=c.best==null?'':s.nand<=c.best?`That is the minimum possible: ${c.best}.`:`It can be done with ${c.best}${c.id==='FULL'?', but only by going down to NANDs and sharing gates between the halves; black-box parts cannot share their insides. That trade, clarity against gate count, is one real designers make every day':''}. Your part is saved either way; a leaner version will replace it.`;
+  $('#win').innerHTML=`<div class="win"><b>${c.id} is now a part in your bin.</b> Your best: ${s.nand} NAND. ${beat}<p style="margin:8px 0 0">${c.why}</p></div>`;
+}
+function chipSvg(chip){
+  const n=chip.w, sp=34, W=40+n*sp+20;
+  let g=`<svg viewBox="0 0 ${W+40} 155"><rect x="40" y="35" width="${W-20}" height="80" rx="4" fill="var(--chip)"/><path d="M40,68 a8,8 0 0 1 0,14" fill="#F6F7F3"/><text x="${40+(W-20)/2}" y="80" fill="#fff" text-anchor="middle" font-size="15" font-weight="700">${chip.name}</text>`;
+  chip.bottom.forEach(([p,l],i)=>{const x=58+i*sp; g+=`<rect x="${x-5}" y="115" width="10" height="12" fill="#999"/><text x="${x}" y="138" text-anchor="middle" font-size="9" fill="var(--muted)">${p}</text><text x="${x}" y="149" text-anchor="middle" font-size="10" font-weight="600" fill="var(--ink)">${l}</text>`;});
+  chip.top.forEach(([p,l],i)=>{const x=58+i*sp; g+=`<rect x="${x-5}" y="23" width="10" height="12" fill="#999"/><text x="${x}" y="8" text-anchor="middle" font-size="9" fill="var(--muted)">${p}</text><text x="${x}" y="19" text-anchor="middle" font-size="10" font-weight="600" fill="var(--ink)">${l}</text>`;});
+  return g+'</svg>';
+}
+function renderBench(){
+  const c=cur();
+  if(!c.bench){ $('#bench').innerHTML=''; return; }
+  $('#bench').innerHTML=`<h2>On the bench</h2>${c.chip?chipSvg(c.chip):''}<p style="margin:0">${c.bench}</p><p style="margin:6px 0 0;color:var(--muted);font-size:13px">${POWER}</p>`;
+}
+function renderAll(){
+  const c=cur(), v=c.race?'race':c.view||'edit';
+  $('#editWrap').style.display=v==='edit'?'flex':'none'; $('#raceWrap').style.display=v==='race'?'flex':'none';
+  $('#counterWrap').style.display=v==='counter'?'flex':'none'; $('#ramWrap').style.display=v==='ram'?'flex':'none';
+  $('#cpuWrap').style.display=v==='cpu'?'flex':'none'; $('#isaWrap').style.display=v==='isa'?'flex':'none'; $('#handWrap').style.display=v==='hand'?'flex':'none'; $('#faultWrap').style.display=v==='fault'?'flex':'none'; $('#bootWrap').style.display=v==='boot'?'flex':'none'; $('#compileWrap').style.display=v==='compile'?'flex':'none'; $('#capWrap').style.display=v==='capstone'?'flex':'none'; $('#romWrap').style.display=v==='rom'?'flex':'none';
+  renderStations(); renderSteps();
+  if(v==='race') renderRace(); else if(v==='counter') renderCounter(); else if(v==='ram') renderRam(); else if(v==='cpu') renderCpu(); else if(v==='rom') renderRom(); else if(v==='isa') renderIsa(); else if(v==='hand') renderHand(); else if(v==='fault') renderFault(); else if(v==='boot') renderBoot(); else if(v==='compile') renderCompile(); else if(v==='capstone') renderCapstone(); else renderBoard();
+  renderSide();
+}
+function renderSeqTable(c){
+  const got=S.seqGot||[];
+  let t='<tr><th></th>'+c.ins.map(l=>`<th>${l}</th>`).join('')+`<th>want ${c.outs.join(' ')}</th><th>got</th><th></th></tr>`;
+  c.seq.forEach((st,i)=>{
+    const want=st.want?st.want.join(' '):'any', g=got[i];
+    const mark=g==null||!st.want?'':(g===want?'<span class="ok">✓</span>':'<span class="no">✗</span>');
+    t+=`<tr class="${S.auto&&S.auto.seq&&S.auto.i===i?'now':''}" title="${st.say}"><td style="text-align:left;font-family:Barlow;font-size:12px">${st.say}</td>`+st.set.map(x=>`<td>${x}</td>`).join('')+`<td>${want}</td><td>${g==null?'·':g}</td><td>${mark}</td></tr>`;
+  });
+  $('#tt').innerHTML=t;
+}
+
+// ================= Editor interaction =================
+function svgPt(svg,e){ const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+board.addEventListener('pointerdown',e=>{
+  const t=e.target, pt=svgPt(board,e);
+  const pin=t.closest('[data-pin]'), sw=t.closest('[data-switch]'), wire=t.closest('[data-wire]'), node=t.closest('[data-node]');
+  if(pin){
+    const [nid,io,i]=pin.dataset.pin.split(':'); const p={node:nid,io,pin:+i};
+    if(!S.pending||S.pending.io===io){ S.pending=p; S.mouse=pt; }
+    else{
+      const from=io==='o'?p:S.pending, to=io==='i'?p:S.pending;
+      S.wires=S.wires.filter(w=>!(w.to.node===to.node&&w.to.pin===to.pin));
+      S.wires.push({id:'w'+(S.nextId++),from:{node:from.node,pin:from.pin},to:{node:to.node,pin:to.pin}});
+      S.pending=null; edited();
+    }
+  } else if(sw){ const n=S.nodes.find(x=>x.id===sw.dataset.switch); n.v=n.v?0:1; S.stable=0; S.auto=null; }
+  else if(wire){ S.sel=wire.dataset.wire; S.pending=null; }
+  else if(node){
+    const n=S.nodes.find(x=>x.id===node.dataset.node); S.sel=n.id; S.pending=null;
+    if(n.type!=='IN'){ S.drag={n,dx:pt.x-n.x,dy:pt.y-n.y}; board.setPointerCapture(e.pointerId); }
+  } else { S.sel=null; S.pending=null; }
+  renderBoard(); renderSide();
+});
+board.addEventListener('pointermove',e=>{
+  const pt=svgPt(board,e); S.mouse=pt;
+  if(S.drag){ S.drag.n.x=Math.max(0,Math.min(800,pt.x-S.drag.dx)); S.drag.n.y=Math.max(0,Math.min(440,pt.y-S.drag.dy)); renderBoard(); }
+  else if(S.pending) renderBoard();
+});
+board.addEventListener('pointerup',()=>{ if(S.drag){ S.drag=null; save(); } });
+function delSel(){
+  if(!S.sel||String(S.sel).startsWith('in')||String(S.sel).startsWith('out')) return;
+  if(String(S.sel).startsWith('w')) S.wires=S.wires.filter(w=>w.id!==S.sel);
+  else { S.nodes=S.nodes.filter(n=>n.id!==S.sel); S.wires=S.wires.filter(w=>w.from.node!==S.sel&&w.to.node!==S.sel); }
+  S.sel=null; edited(); renderBoard();
+}
+$('#del').onclick=delSel;
+document.addEventListener('keydown',e=>{
+  if(isView(cur())) return;
+  if((e.key==='Delete'||e.key==='Backspace')&&document.activeElement.tagName!=='INPUT'){ e.preventDefault(); delSel(); }
+  if(e.key==='Escape'){ S.pending=null; renderBoard(); }
+});
+$('#clear').onclick=()=>{ S.nodes=S.nodes.filter(n=>n.type==='IN'||n.type==='OUT'); S.wires=[]; S.sel=null; edited(); renderBoard(); };
+$('#palette').addEventListener('click',e=>{
+  const b=e.target.closest('[data-add]'); if(!b) return; const cnt=S.nodes.length;
+  S.nodes.push({id:'g'+(S.nextId++),type:b.dataset.add,x:240+(cnt*53)%380,y:50+(cnt*83)%360});
+  edited(); renderBoard();
+});
+$('#steps').addEventListener('click',e=>{ const b=e.target.closest('[data-ch]'); if(b&&!b.disabled) loadChallenge(b.dataset.ch); });
+$('#stations').addEventListener('click',e=>{
+  const b=e.target.closest('[data-st]'); if(!b||b.disabled) return;
+  const list=CH.filter(c=>c.st===b.dataset.st); const next=list.find(c=>solved(c.req)&&!P.solved[c.id])||list[list.length-1];
+  loadChallenge(solved(next.req)?next.id:list[0].id);
+});
+$('#hintbtn').onclick=()=>{ const c=cur(); if(S.hintN<c.hints.length){ $('#hint').innerHTML+=`<div class="hint">${c.hints[S.hintN++]}</div>`; renderSide(); } };
+$('#testall').onclick=()=>{
+  const c=cur();
+  if(c.seq){ S.seqGot=[]; S.auto={seq:true,i:0,wait:0}; applySeq(0); }
+  else { S.auto={r:0,wait:0}; setInputs(0); }
+};
+function applySeq(i){ const ins=S.nodes.filter(n=>n.type==='IN'); cur().seq[i].set.forEach((b,k)=>ins[k].v=b); S.stable=0; }
+$('#reset').onclick=async()=>{ if(!confirm('Erase every part and circuit you have built?')) return; P={solved:{},chips:{},circuits:{}}; try{await window.storage.delete('workbench-v1');}catch(e){} S.station='gates'; loadChallenge('NOT'); };
+function setInputs(r){ const ins=S.nodes.filter(n=>n.type==='IN'); bits(r,ins.length).forEach((b,i)=>ins[i].v=b); S.stable=0; }
+
+function checkSeqWin(){
+  const c=cur(), g=S.seqGot;
+  if(!c.seq.every((st,i)=>!st.want||g[i]===st.want.join(' '))) return;
+  const nand=nandCount(S.nodes), prev=P.solved[c.id];
+  if(prev&&prev.nand<=nand) return;
+  const nodes=JSON.parse(JSON.stringify(S.nodes)); nodes.forEach(n=>{ if(n.type==='IN') n.v=0; });
+  P.chips[c.id]={name:c.id,ins:c.ins,outs:c.outs,circuit:{nodes,wires:JSON.parse(JSON.stringify(S.wires))},nand,
+    depths:c.outs.map((_,j)=>depthTo(S.nodes,S.wires,'out'+j))};
+  P.solved[c.id]={nand}; save(); renderStations(); renderSteps();
+}
+function checkWin(){
+  const c=cur(); if(!c.f) return;
+  const k=c.ins.length;
+  for(let r=0;r<(1<<k);r++) if(S.observed[r]!==c.f(...bits(r,k)).map(x=>x?1:0).join(' ')) return;
+  const nand=nandCount(S.nodes), prev=P.solved[c.id];
+  if(prev&&prev.nand<=nand) return;
+  const table=[...Array(1<<k)].map((_,r)=>c.f(...bits(r,k)).map(x=>x?1:0));
+  P.chips[c.id]={name:c.id,ins:c.ins,outs:c.outs,table,nand,depths:c.outs.map((_,j)=>depthTo(S.nodes,S.wires,'out'+j)),
+    src:{nodes:JSON.parse(JSON.stringify(S.nodes)),wires:JSON.parse(JSON.stringify(S.wires))}};
+  P.solved[c.id]={nand}; save(); renderStations(); renderSteps();
+}
+
+// ================= The ripple race =================
+// Built from the reader's own FULL and XOR parts, wired by the program because
+// wiring eight identical columns by hand teaches nothing new. The simulator is the same one.
+const R={nodes:[],wires:[],out:{},q:{},A:0,B:0,sub:0,t:0,settledAt:null,trail:[],last:null};
+function setupRace(){
+  const N=[], W=[]; const w=(f,fp,t,tp)=>W.push({from:{node:f,pin:fp},to:{node:t,pin:tp}});
+  N.push({id:'sub',type:'IN',v:0});
+  for(let i=0;i<8;i++){
+    N.push({id:'a'+i,type:'IN',v:0},{id:'b'+i,type:'IN',v:0},{id:'x'+i,type:'XOR'},{id:'f'+i,type:'FULL'},{id:'s'+i,type:'OUT'});
+    w('b'+i,0,'x'+i,0); w('sub',0,'x'+i,1);
+    w('a'+i,0,'f'+i,0); w('x'+i,0,'f'+i,1); w(i?'f'+(i-1):'sub', i?1:0, 'f'+i,2);
+    w('f'+i,0,'s'+i,0);
+  }
+  N.push({id:'cout',type:'OUT'}); w('f7',1,'cout',0);
+  R.nodes=N; R.wires=W; R.out={}; R.q={};
+  for(let k=0;k<60;k++) step(R.nodes,R.wires,R.out,R.q);
+  raceInputs(R.A,R.B);
+}
+function raceInputs(a,b){
+  R.A=a&255; R.B=b&255;
+  for(let i=0;i<8;i++){ R.nodes.find(n=>n.id==='a'+i).v=(R.A>>i)&1; R.nodes.find(n=>n.id==='b'+i).v=(R.B>>i)&1; }
+  R.nodes.find(n=>n.id==='sub').v=R.sub;
+  R.t=0; R.settledAt=null; R.lastChange=0; R.stable=0; R.last=raceSum(); R.trail=[{t:0,v:R.last}];
+}
+function raceSum(){ let s=0; for(let i=0;i<8;i++) s|=((R.out['s'+i]||[0])[0])<<i; return s; }
+const signed=v=>v>127?v-256:v;
+function raceTick(){
+  const changed=step(R.nodes,R.wires,R.out,R.q); R.t++; if(changed) R.lastChange=R.t;
+  const s=raceSum();
+  if(s!==R.last){ R.trail.push({t:R.t,v:s}); R.last=s; }
+  R.stable=changed?0:(R.stable||0)+1;
+  if(R.stable===settleWindow(R.nodes)&&R.settledAt==null){
+    R.settledAt=R.lastChange;
+    const carries=[...Array(8)].filter((_,i)=>(R.out['f'+i]||[0,0])[1]).length;
+    if(carries===8&&!P.solved.RACE){ P.solved.RACE={}; save(); renderSteps(); renderWin(); }
+  }
+}
+function renderRace(){
+  const X=i=>790-i*100; let h=GLOW;
+  const bOn=i=>(R.nodes.find(n=>n.id==='b'+i)||{}).v, aOn=i=>(R.nodes.find(n=>n.id==='a'+i)||{}).v;
+  for(let i=0;i<8;i++){
+    const x=X(i), f=R.out['f'+i]||[0,0], xv=(R.out['x'+i]||[0])[0];
+    h+=`<text x="${x+30}" y="18" text-anchor="middle" font-size="11" fill="var(--muted)">bit ${i}</text>`;
+    // A and B toggles
+    h+=`<rect x="${x+2}" y="28" width="26" height="26" rx="4" fill="${aOn(i)?'var(--ink)':'#fff'}" stroke="var(--ink)" stroke-width="1.5" data-bit="a${i}" style="cursor:pointer"/><text x="${x+15}" y="46" text-anchor="middle" font-size="13" font-weight="600" fill="${aOn(i)?'#fff':'var(--ink)'}" pointer-events="none">${aOn(i)?1:0}</text>`;
+    h+=`<rect x="${x+32}" y="28" width="26" height="26" rx="4" fill="${bOn(i)?'var(--ink)':'#fff'}" stroke="var(--ink)" stroke-width="1.5" data-bit="b${i}" style="cursor:pointer"/><text x="${x+45}" y="46" text-anchor="middle" font-size="13" font-weight="600" fill="${bOn(i)?'#fff':'var(--ink)'}" pointer-events="none">${bOn(i)?1:0}</text>`;
+    h+=`<text x="${x+22}" y="66" font-size="9" fill="var(--muted)" text-anchor="end">A</text><text x="${x+52}" y="66" font-size="9" fill="var(--muted)" text-anchor="end">B</text>`;
+    // B through XOR (only shown when subtracting)
+    h+=`<line x1="${x+15}" y1="54" x2="${x+15}" y2="150" stroke="${col(aOn(i))}" stroke-width="3"/>`;
+    if(R.sub){
+      h+=`<line x1="${x+45}" y1="54" x2="${x+45}" y2="84" stroke="${col(bOn(i))}" stroke-width="3"/>`;
+      h+=`<rect x="${x+30}" y="84" width="32" height="26" rx="3" fill="var(--chip)"/><text x="${x+46}" y="101" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">XOR</text>`;
+      h+=`<line x1="${x+45}" y1="110" x2="${x+45}" y2="150" stroke="${col(xv)}" stroke-width="3"/>`;
+    } else h+=`<line x1="${x+45}" y1="54" x2="${x+45}" y2="150" stroke="${col(xv)}" stroke-width="3"/>`;
+    // FULL block
+    h+=`<rect x="${x}" y="150" width="60" height="70" rx="3" fill="var(--chip)"/><path d="M${x+23},150 a7,7 0 0 0 14,0" fill="#FBFCF9"/><text x="${x+30}" y="190" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">FULL</text>`;
+    // carry to the left
+    const cx=x-40, cv=f[1];
+    if(i<7) h+=`<path d="M${x},200 H${cx+20}" stroke="${col(cv)}" stroke-width="4" ${cv?'filter="url(#glow)"':''}/><polygon points="${cx+20},194 ${cx+10},200 ${cx+20},206" fill="${col(cv)}"/>`;
+    // sum lamp
+    h+=`<line x1="${x+30}" y1="220" x2="${x+30}" y2="262" stroke="${col(f[0])}" stroke-width="3"/>`;
+    h+=`<circle cx="${x+30}" cy="282" r="18" fill="${f[0]?'var(--live)':'#DADFD9'}" stroke="var(--ink)" stroke-width="2" ${f[0]?'filter="url(#glow)"':''}/>`;
+    h+=`<text x="${x+30}" y="318" text-anchor="middle" font-size="12" fill="var(--muted)">S${i}</text>`;
+  }
+  // carry in on the right (the SUB line), carry out on the left
+  const cin=R.sub;
+  h+=`<path d="M880,200 H850" stroke="${col(cin)}" stroke-width="4"/><text x="885" y="232" text-anchor="end" font-size="11" fill="var(--muted)">carry in ${cin}</text>`;
+  const co=(R.out.cout||[0])[0];
+  h+=`<path d="M90,200 H40" stroke="${col(co)}" stroke-width="4"/><circle cx="30" cy="200" r="10" fill="${co?'var(--live)':'#DADFD9'}" stroke="var(--ink)" stroke-width="2"/><text x="30" y="228" text-anchor="middle" font-size="11" fill="var(--muted)">carry out</text>`;
+  h+=`<text x="450" y="370" text-anchor="middle" font-size="13" fill="var(--muted)">Click any A or B square to flip that bit. Bit 0, the ones column, is on the right, as in written numbers.</text>`;
+  raceSvg.innerHTML=h;
+
+  const s=raceSum(), want=R.sub?(R.A-R.B)&255:(R.A+R.B)&255, done=R.settledAt!=null;
+  const op=R.sub?'−':'+';
+  const showSigned=R.sub;
+  $('#readout').innerHTML=
+   `<div><small>Question</small><b>${R.A} ${op} ${R.B}</b>${showSigned?`<small>signed: ${signed(R.A)} ${op} ${signed(R.B)}</small>`:''}</div>`+
+   `<div><small>Lamps show now</small><b style="color:${s===want?'var(--good)':'var(--bad)'}">${s}</b><small>${showSigned?'as signed: '+signed(s):(done?'settled':'still rippling')}</small></div>`+
+   `<div><small>Gate delays since you asked</small><b>${done?R.settledAt:R.t}</b><small>${done?'answer settled':'counting…'}</small></div>`+
+   `<div><small>Carry out</small><b>${co}</b><small>${R.sub?(co?'no borrow: A ≥ B':'borrow: A < B'):(co?'overflow: answer > 255':'fits in 8 bits')}</small></div>`;
+  $('#trail').innerHTML='<span style="color:var(--muted)">Values the lamps showed, with the delay at which each appeared:</span><br>'+
+    R.trail.map(e=>e.t===0?`<span style="color:var(--muted)">before: ${e.v}</span>`:`<span class="${e.v===want?'right':'wrong'}">${e.t}: ${e.v}</span>`).join('');
+  const fd=P.chips.FULL?Math.max(...P.chips.FULL.depths):0;
+  $('#status').textContent=`Each of your FULL adders takes ${fd} gate delays to answer; its carry output takes ${P.chips.FULL?P.chips.FULL.depths[1]:0}. Eight in a row: work out the worst case before you test it.`;
+}
+raceSvg.addEventListener('pointerdown',e=>{
+  const b=e.target.closest('[data-bit]'); if(!b) return;
+  const id=b.dataset.bit, i=+id.slice(1);
+  if(id[0]==='a') raceInputs(R.A^(1<<i),R.B); else raceInputs(R.A,R.B^(1<<i));
+  renderRace();
+});
+$('#raceWrap').addEventListener('click',e=>{
+  const p=e.target.closest('[data-preset]'); if(!p) return;
+  if(p.dataset.preset==='rand') raceInputs(Math.random()*256|0,Math.random()*256|0);
+  else { const [a,b]=p.dataset.preset.split(',').map(Number); raceInputs(a,b); }
+  renderRace();
+});
+$('#subBtn').onclick=()=>{
+  R.sub^=1; $('#subBtn').textContent='Subtract: '+(R.sub?'on':'off'); $('#subBtn').setAttribute('aria-pressed',!!R.sub);
+  if(R.sub&&R.A===255&&R.B===1) raceInputs(5,7); else raceInputs(R.A,R.B); renderRace();
+};
+
+// ================= Memory station =================
+const HC74 = {name:'74HC74', w:7,
+  bottom:[[1,'CLR1'],[2,'D1'],[3,'CLK1'],[4,'PR1'],[5,'Q1'],[6,'Q̄1'],[7,'GND']],
+  top:[[14,'VCC'],[13,'CLR2'],[12,'D2'],[11,'CLK2'],[10,'PR2'],[9,'Q2'],[8,'Q̄2']]};
+const NE555 = {name:'555', w:4,
+  bottom:[[1,'GND'],[2,'TRIG'],[3,'OUT'],[4,'RST']],
+  top:[[8,'VCC'],[7,'DIS'],[6,'THR'],[5,'CTRL']]};
+const HC139 = {name:'74HC139', w:8,
+  bottom:[[1,'1E'],[2,'1A0'],[3,'1A1'],[4,'1Y0'],[5,'1Y1'],[6,'1Y2'],[7,'1Y3'],[8,'GND']],
+  top:[[16,'VCC'],[15,'2E'],[14,'2A0'],[13,'2A1'],[12,'2Y0'],[11,'2Y1'],[10,'2Y2'],[9,'2Y3']]};
+
+STATIONS.push({id:'memory',name:'Memory',req:'FULL'});
+CH.push(
+ {id:'LATCH', st:'memory', ins:['S','R'], outs:['Q'], best:4, req:'FULL', seq:[
+    {set:[1,0],want:[1],say:'Set: S on'}, {set:[0,0],want:[1],say:'Let go: does it remember 1?'},
+    {set:[0,1],want:[0],say:'Reset: R on'}, {set:[0,0],want:[0],say:'Let go: does it remember 0?'},
+    {set:[1,0],want:[1],say:'Set again'}, {set:[0,0],want:[1],say:'Remember again'}],
+  text:'Every circuit so far forgets the moment you let go of a switch. Build one that <b>remembers</b>: a pulse on S turns Q on and it stays on; a pulse on R turns it off and it stays off. When both are off, Q holds whatever it was last told.',
+  hints:['Nothing you have built can remember, because every output is a function of the inputs right now. Something has to change in the shape of the circuit, not in the parts.',
+    'Let an output become part of its own input. Two gates, each feeding the other, can hold each other in place.',
+    'Cross-couple two NANDs: output of the first into an input of the second, and back. The NAND version reacts to 0s, so put a NOT on S and on R before they go in. The first NAND’s output is Q.',
+    'Now try this with both switches on, then turn them off at the same moment. Watch the lamp. Real latches do this too.'],
+  why:'The circuit has two stable states for the same inputs, and which one it sits in depends on its history. That is all memory is: not a new component, just a loop. Try turning S and R on together and releasing them at the same moment: the two gates chase each other until chance breaks the tie. Engineers call that metastability, and it is why the next two parts exist.',
+  chip:HC00, bench:'Two NANDs of a 74HC00 cross-coupled make an active-low latch (pull S̄ or R̄ to ground to act). Add two more NANDs as inverters for active-high S and R: one whole chip. Put a pull-up resistor on each input and the latch is also the classic cure for a bouncing push-button.'},
+ {id:'DLATCH', st:'memory', ins:['D','E'], outs:['Q'], best:5, req:'LATCH', seq:[
+    {set:[1,1],want:[1],say:'Enabled, D = 1'}, {set:[0,1],want:[0],say:'Still enabled: Q follows D'},
+    {set:[1,1],want:[1],say:'Follows again'}, {set:[1,0],want:[1],say:'Enable off'},
+    {set:[0,0],want:[1],say:'D changes, Q must not'}, {set:[0,1],want:[0],say:'Enable on: Q catches up'}],
+  text:'A latch with two switches is awkward: you must never press both. Build a better one. <b>D</b> is the value to store; <b>E</b> is a door. While E is on, Q copies D. When E goes off, Q keeps the last value it saw.',
+  hints:['Your LATCH needs an S and an R. D decides which one you want; E decides whether you want either.',
+    'S should be on when D is 1 and the door is open. R should be on when D is 0 and the door is open.',
+    'S = D AND E. R = (NOT D) AND E. S and R can now never both be on, so the dangerous case is gone by design.'],
+  why:'By deriving S and R from a single D, the forbidden input can no longer happen. But notice the word “while”: as long as E is on, the door is open and Q follows D, including every glitch on the way. Feed an adder’s output back into it and it will race. The next part fixes that by opening the door for an instant, not an interval.',
+  chip:HC74, bench:'Build this from your NAND chips if you like, but the everyday parts are the 74HC75 (four D latches) or the 74HC573 (eight, called a transparent latch). The 74HC74 shown here is next: the edge-triggered version.'},
+ {id:'DFF', st:'memory', ins:['D','CLK'], outs:['Q'], best:null, req:'DLATCH', seq:[
+    {set:[0,0],want:null,say:'Start with the clock low'}, {set:[0,1],want:[0],say:'Clock rises with D = 0'},
+    {set:[1,0],want:[0],say:'D changes, clock low'}, {set:[1,1],want:[1],say:'Clock rises: capture 1'},
+    {set:[0,1],want:[1],say:'D changes while clock high: ignore it'}, {set:[0,0],want:[1],say:'Clock falls: still ignore'},
+    {set:[0,1],want:[0],say:'Clock rises: capture 0'}],
+  text:'Build a memory that captures D at <b>one instant only</b>: the moment CLK rises from 0 to 1. At every other time, including while CLK stays high, Q must ignore D completely.',
+  hints:['One D latch has a door that stays open for as long as its enable is on. What if you put two doors in a row, and made sure they were never open at the same time?',
+    'The first latch (the master) is open while CLK is 0. The second latch (the slave) is open while CLK is 1. The slave copies the master.',
+    'Master: D from D, E from NOT CLK. Slave: D from the master’s Q, E from CLK. Q is the slave’s Q. When CLK rises, the master shuts on whatever D was at that moment, and the slave opens to show it.'],
+  why:'Two doors that are never open together, like an airlock. The only moment anything passes from D to Q is the instant the clock changes, so a circuit built from these can feed its own output back through an adder without racing: the adder’s wrong in-between answers arrive while the door is shut. This part, the edge-triggered flip-flop, is what every register in a processor is made of.',
+  chip:HC74, bench:'The 74HC74 has two of these with extra pins: PR (preset) and CLR (clear) force Q to 1 or 0 immediately, which is how a real register is reset at power-on. Tie PR and CLR high when unused; they are active-low. For eight bits at once, use a 74HC574 or the 74HC173 your Bench Computer uses.'},
+ {id:'COUNTER', st:'memory', view:'counter', title:'Clock the counter', req:'DFF', ins:[], outs:[],
+  text:'Eight of your flip-flops form a register. Your adder adds 1 to it, and the answer goes straight back in. Each clock rise should count up by exactly one. Try it with your transparent latches first, then with flip-flops, then <b>turn the clock faster</b> until it breaks.',
+  hints:['In latch mode, how many trips round the loop can the signal make while the door is open?',
+    'In flip-flop mode, shorten the clock period step by step. Watch the grey band: that is your adder still rippling. What happens when a clock rise lands inside it?',
+    'The safe clock period is the time for the flip-flops to update, plus the worst-case ripple through your adder, plus a little margin. Engineers call the longest such path the critical path.'],
+  winTitle:'You broke it the honest way.',
+  why:'Faster is harmless right up to the point where the clock rises before the adder has finished. Then the register captures one of those half-rippled answers from the ripple race, and the count jumps wrongly, not slowly. The clock does not make anything happen; it decides when it is safe to look. This is the reason a processor has a maximum clock speed, and the reason the look-ahead carry inside the 74HC283 exists.',
+  chip:NE555, bench:'A 555 timer in astable mode is the Bench Computer’s clock: two resistors and a capacitor set the speed, and a potentiometer in place of one resistor makes it adjustable. Add a push-button and a second 555 for single-stepping one pulse at a time: it is the most useful debugging tool you will build. The register is two 74HC173s, the adder your two 74HC283s with B tied to 00000001.'},
+ {id:'DECODE', st:'memory', ins:['A1','A0'], outs:['Y0','Y1','Y2','Y3'], f:(a1,a0)=>[!a1&&!a0,!a1&&a0,a1&&!a0,a1&&a0], best:null, req:'DFF',
+  text:'An <b>address</b> is a number naming one place. Build the circuit that turns a 2-bit address into four wires, exactly one of which lights: address 2 (A1 = 1, A0 = 0) lights Y2 and nothing else.',
+  hints:['Each output is an AND of two things. Y3 is A1 AND A0. What is Y0?','Y0 needs both bits to be 0. Invert them first. Two NOTs feed four ANDs.'],
+  why:'This is how a number reaches out and touches one place among many: each output wire checks for one exact pattern of address bits. Double the address bits and the places square; a 62256 memory chip uses fifteen address bits to select one of 32,768 bytes with exactly this idea, scaled.',
+  chip:HC139, bench:'The 74HC139 holds two of these 2-to-4 decoders. Its outputs are active-low: the selected one goes to 0 and the rest stay at 1, because memory chips are selected by a low signal. The E pin enables the decoder and is active-low too.'},
+ {id:'RAM', st:'memory', view:'ram', title:'Build a memory', req:'DECODE', ins:[], outs:[],
+  text:'Four registers of your flip-flops, one decoder, one write button. Choose an address, set the data switches, press <b>Write</b>. Then change the data and the address and see what stays.',
+  hints:['Only one row’s clock line lights during a write. Which part decided that?',
+    'Write 5 to address 2 and 9 to address 0. Now flip the data switches around. Did either word change? Why not?',
+    'When the page first opened, the memory held numbers nobody wrote. Where did they come from?'],
+  winTitle:'Your memory works.',
+  why:'Addressing is selection: the decoder picks one row, and only that row’s flip-flops see a clock edge, so only they capture the data bus. Every other row keeps its old value because its door never opened. The random numbers at startup are real too: flip-flops power up in whichever state the race resolves to, which is why real computers clear their memory before trusting it.',
+  chip:HC139, bench:'Nobody builds RAM from flip-flops beyond a few words; it is exactly this circuit, packed. The Bench Computer uses a 62256 static RAM: 15 address pins, 8 data pins, and three control pins (chip select, output enable, write enable), all active-low. Its internal decoder does what yours does here.'}
+);
+
+// Circuit chips: a sequential part cannot be a truth table, so it keeps its own
+// wiring and runs it, one tick at a time, inside every copy of it.
+function stepCircuitChip(n,c,v,q){
+  let inst=q[n.id];
+  if(!inst||!inst.nodes){
+    inst=q[n.id]={nodes:JSON.parse(JSON.stringify(c.circuit.nodes)),wires:c.circuit.wires,out:{},q:{}};
+    inst.ins=c.ins.map((_,i)=>inst.nodes.find(x=>x.id==='in'+i));
+    inst.src=c.outs.map((_,j)=>inst.wires.find(w=>w.to.node==='out'+j));
+  }
+  inst.ins.forEach((x,i)=>{ if(x){ x.v=v[i]; inst.out[x.id]=[v[i]]; } });
+  step(inst.nodes,inst.wires,inst.out,inst.q);
+  return inst.src.map(w=>w&&((inst.out[w.from.node]||[])[w.from.pin||0])?1:0);
+}
+
+// ---------- Counter view ----------
+const C={mode:'latch',half:40,timer:0,clk:0,t:0,nodes:[],wires:[],out:{},q:{},hist:[],caps:[],regChangeT:0,lastReg:null,lastAdd:null,addChangeT:0,maxSettle:0,okRun:0,sawWrong:false,paused:false};
+function setupCounter(){
+  const N=[{id:'clk',type:'IN',v:0},{id:'one',type:'IN',v:1},{id:'zero',type:'IN',v:0}], W=[];
+  const w=(f,fp,t,tp)=>W.push({from:{node:f,pin:fp},to:{node:t,pin:tp}});
+  const reg=C.mode==='ff'?'DFF':'DLATCH';
+  for(let i=0;i<8;i++){
+    N.push({id:'r'+i,type:reg},{id:'f'+i,type:'FULL'});
+    w('r'+i,0,'f'+i,0); w(i?'zero':'one',0,'f'+i,1); w(i?'f'+(i-1):'zero',i?1:0,'f'+i,2);
+    w('f'+i,0,'r'+i,0); w('clk',0,'r'+i,1);
+  }
+  Object.assign(C,{nodes:N,wires:W,out:{},q:{},hist:[],caps:[],t:0,timer:0,clk:0,lastReg:null,lastAdd:null,maxSettle:0,okRun:0});
+  for(let k=0;k<80;k++) step(C.nodes,C.wires,C.out,C.q);   // power-up: flip-flops land wherever they land
+  C.regChangeT=0; C.addChangeT=0;
+}
+const regVal=()=>{let s=0;for(let i=0;i<8;i++) s|=((C.out['r'+i]||[0])[0])<<i; return s;};
+const addVal=()=>{let s=0;for(let i=0;i<8;i++) s|=((C.out['f'+i]||[0])[0])<<i; return s;};
+function estSettle(){
+  const f=P.chips.FULL, r=P.chips[C.mode==='ff'?'DFF':'DLATCH'];
+  return (r?Math.max(...r.depths):2)+(f?f.depths[1]*7+f.depths[0]:20);
+}
+// "Still rippling" is judged from what the adder is actually doing: during a ripple its
+// output changes at least once every carry delay, so a quiet gap longer than that means done.
+function adderBusy(){
+  const f=P.chips.FULL, r=P.chips[C.mode==='ff'?'DFF':'DLATCH'];
+  const gap=(f?f.depths[1]:4)+2, regD=r?Math.max(...r.depths):2;
+  return (C.t-C.regChangeT)<regD+gap || (C.t-C.addChangeT)<=gap;
+}
+function counterTick(){
+  C.timer++; let rising=false;
+  if(C.timer>=C.half){ C.timer=0; C.clk^=1; rising=!!C.clk; C.nodes[0].v=C.clk; }
+  const before=regVal(), settledBefore=!adderBusy();
+  if(rising){
+    const prev=C.caps.length?C.caps[C.caps.length-1].v:null;
+    const ok = prev==null || before===((prev+1)&255);
+    C.caps.push({v:before,ok,safe:settledBefore}); if(C.caps.length>14) C.caps.shift();
+    if(prev!=null&&C.mode==='ff'){
+      if(ok){ if(++C.okRun>=5) C.hadClean=true; } else { C.okRun=0; C.sawWrongFF=true; }
+      if(C.hadClean&&C.sawWrongFF&&!P.solved.COUNTER){ P.solved.COUNTER={}; save(); renderSteps(); }
+    }
+  }
+  step(C.nodes,C.wires,C.out,C.q); C.t++;
+  const r=regVal(), a=addVal();
+  if(r!==C.lastReg){ C.lastReg=r; C.regChangeT=C.t; }
+  if(a!==C.lastAdd){ C.lastAdd=a; C.addChangeT=C.t; C.maxSettle=Math.max(C.maxSettle,C.t-C.regChangeT); }
+  const busy=adderBusy();
+  C.hist.push({clk:C.clk,busy,edge:rising,unsafe:rising&&!settledBefore}); if(C.hist.length>170) C.hist.shift();
+}
+function renderCounter(){
+  const svg=$('#counter'); let h=GLOW;
+  // waveform
+  const x0=70, dx=4.6;
+  h+=`<text x="10" y="42" font-size="12" fill="var(--muted)">clock</text><text x="10" y="92" font-size="12" fill="var(--muted)">adder</text>`;
+  let path='';
+  C.hist.forEach((s,i)=>{ const x=x0+i*dx, y=s.clk?22:52; path+=(i?'L':'M')+x+','+y+' '+'L'+(x+dx)+','+y+' ';
+    if(s.busy) h+=`<rect x="${x}" y="76" width="${dx+.4}" height="24" fill="#B9C0BE"/>`; else h+=`<rect x="${x}" y="76" width="${dx+.4}" height="24" fill="var(--ink)"/>`;
+    if(s.edge) h+=`<line x1="${x}" y1="14" x2="${x}" y2="108" stroke="${s.unsafe?'var(--bad)':'var(--good)'}" stroke-width="2"/>`; });
+  h+=`<path d="${path}" stroke="var(--live)" stroke-width="3" fill="none"/>`;
+  h+=`<text x="${x0}" y="124" font-size="11" fill="var(--muted)">Grey: the adder is still rippling. Dark: its answer is final. Each vertical line is a clock rise: green if the answer was final, red if not.</text>`;
+  // register lamps
+  const r=regVal(), a=addVal(), busyNow=adderBusy();
+  h+=`<text x="10" y="190" font-size="13" font-weight="600" fill="var(--ink)">Register (${C.mode==='ff'?'your DFFs':'your D latches'})</text>`;
+  h+=`<text x="10" y="290" font-size="13" font-weight="600" fill="var(--ink)">Adder output (register + 1)</text>`;
+  for(let i=0;i<8;i++){
+    const x=780-i*80, rb=(r>>i)&1, ab=(a>>i)&1;
+    h+=`<circle cx="${x}" cy="225" r="18" fill="${rb?'var(--live)':'#DADFD9'}" stroke="var(--ink)" stroke-width="2" ${rb?'filter="url(#glow)"':''}/>`;
+    h+=`<rect x="${x-18}" y="305" width="36" height="30" rx="3" fill="${busyNow?'#fff':'var(--chip)'}" stroke="${busyNow?'#B9C0BE':'var(--chip)'}" stroke-width="2"/><text x="${x}" y="326" text-anchor="middle" font-size="16" font-family="JetBrains Mono,monospace" fill="${busyNow?'#9aa':'#fff'}">${ab}</text>`;
+    h+=`<text x="${x}" y="360" text-anchor="middle" font-size="11" fill="var(--muted)">bit ${i}</text>`;
+  }
+  h+=`<text x="870" y="232" text-anchor="end" font-size="22" font-family="JetBrains Mono,monospace" fill="var(--ink)">${r}</text>`;
+  h+=`<text x="870" y="328" text-anchor="end" font-size="22" font-family="JetBrains Mono,monospace" fill="${busyNow?'#9aa':'var(--ink)'}">${a}</text>`;
+  svg.innerHTML=h;
+  const period=2*C.half, need=estSettle();
+  $('#cread').innerHTML=`<div><small>Clock period</small><b>${period}</b><small>gate delays per cycle</small></div>`+
+    `<div><small>Loop needs, worst case</small><b>${need}</b><small>register delay + full carry ripple</small></div>`+
+    `<div><small>Verdict</small><b style="color:${C.mode!=='ff'?'var(--bad)':period>=need?'var(--good)':'var(--bad)'}">${C.mode!=='ff'?'racing':period>=need?'safe':'too fast'}</b><small>${C.mode==='ff'?'a whole cycle must outlast the ripple':'the door is open for a whole half-cycle'}</small></div>`;
+  $('#ctrail').innerHTML='<span style="color:var(--muted)">Value captured at each clock rise (red: not one more than the last):</span><br>'+C.caps.map((c,i)=>`<span class="${i===0?'':c.ok?'right':'wrong'}">${c.v}</span>`).join('');
+  $('#status').textContent=C.mode==='ff'?'Flip-flop mode: each register only looks at its input at the instant the clock rises.':'Transparent latch mode: while the clock is high, the door is open and the loop runs freely.';
+}
+
+// ---------- RAM view ----------
+const M={nodes:[],wires:[],out:{},q:{},A:0,D:0,we:0,pulse:0,writes:{},startup:null};
+function setupRam(){
+  const N=[{id:'a1',type:'IN',v:0},{id:'a0',type:'IN',v:0},{id:'we',type:'IN',v:0},{id:'dec',type:'DECODE'}], W=[];
+  const w=(f,fp,t,tp)=>W.push({from:{node:f,pin:fp},to:{node:t,pin:tp}});
+  for(let b=0;b<8;b++) N.push({id:'d'+b,type:'IN',v:0});
+  w('a1',0,'dec',0); w('a0',0,'dec',1);
+  for(let k=0;k<4;k++){
+    N.push({id:'g'+k,type:'AND'}); w('dec',k,'g'+k,0); w('we',0,'g'+k,1);
+    for(let b=0;b<8;b++){ N.push({id:`m${k}_${b}`,type:'DFF'}); w('d'+b,0,`m${k}_${b}`,0); w('g'+k,0,`m${k}_${b}`,1); }
+  }
+  Object.assign(M,{nodes:N,wires:W,out:{},q:{},pulse:0,writes:{}});
+  for(let i=0;i<80;i++) step(M.nodes,M.wires,M.out,M.q);
+  M.startup=[0,1,2,3].map(word);
+  ramInputs();
+}
+const word=k=>{let s=0;for(let b=0;b<8;b++) s|=((M.out[`m${k}_${b}`]||[0])[0])<<b; return s;};
+function ramInputs(){ const f=id=>M.nodes.find(n=>n.id===id); f('a1').v=(M.A>>1)&1; f('a0').v=M.A&1; for(let b=0;b<8;b++) f('d'+b).v=(M.D>>b)&1; f('we').v=M.we; }
+function ramTick(){
+  // Hold the data steady for a few delays before the clock edge arrives (setup time),
+  // exactly as a real memory's datasheet demands; then pulse the write line.
+  if(M.setup>0){ if(--M.setup===0){ M.we=1; ramInputs(); } }
+  else if(M.pulse>0){ M.pulse--; if(M.pulse===0){ M.we=0; ramInputs(); } }
+  step(M.nodes,M.wires,M.out,M.q);
+}
+function renderRam(){
+  const svg=$('#ram'); let h=GLOW;
+  const dec=M.out.dec||[0,0,0,0];
+  // address switches
+  h+=`<text x="20" y="24" font-size="13" font-weight="600" fill="var(--ink)">Address</text>`;
+  [1,0].forEach((b,i)=>{ const on=(M.A>>b)&1, x=20+i*40;
+    h+=`<rect x="${x}" y="34" width="32" height="32" rx="4" fill="${on?'var(--ink)':'#fff'}" stroke="var(--ink)" stroke-width="1.5" data-abit="${b}" style="cursor:pointer"/><text x="${x+16}" y="56" text-anchor="middle" font-size="14" font-weight="600" fill="${on?'#fff':'var(--ink)'}" pointer-events="none">${on}</text><text x="${x+16}" y="82" text-anchor="middle" font-size="10" fill="var(--muted)">A${b}</text>`; });
+  // decoder block
+  h+=`<rect x="40" y="110" width="70" height="250" rx="3" fill="var(--chip)"/><path d="M68,110 a7,7 0 0 0 14,0" fill="#FBFCF9"/><text x="75" y="240" text-anchor="middle" font-size="12" font-weight="700" fill="#fff" transform="rotate(-90 75 240)">your DECODE</text>`;
+  h+=`<line x1="36" y1="66" x2="36" y2="110" stroke="${col(M.A>>1&1)}" stroke-width="3"/><line x1="76" y1="66" x2="76" y2="110" stroke="${col(M.A&1)}" stroke-width="3"/>`;
+  // data bus switches
+  h+=`<text x="230" y="24" font-size="13" font-weight="600" fill="var(--ink)">Data in</text>`;
+  const bx=b=>820-b*72;
+  for(let b=0;b<8;b++){ const on=(M.D>>b)&1, x=bx(b);
+    h+=`<rect x="${x-16}" y="34" width="32" height="32" rx="4" fill="${on?'var(--ink)':'#fff'}" stroke="var(--ink)" stroke-width="1.5" data-dbit="${b}" style="cursor:pointer"/><text x="${x}" y="56" text-anchor="middle" font-size="14" font-weight="600" fill="${on?'#fff':'var(--ink)'}" pointer-events="none">${on}</text>`;
+    h+=`<line x1="${x}" y1="66" x2="${x}" y2="360" stroke="${col(on)}" stroke-width="2" stroke-dasharray="${on?'':'3 3'}" opacity=".7"/>`; }
+  // rows
+  for(let k=0;k<4;k++){
+    const y=130+k*60, sel=dec[k], clk=(M.out['g'+k]||[0])[0], v=word(k);
+    h+=`<line x1="110" y1="${y}" x2="190" y2="${y}" stroke="${col(sel)}" stroke-width="3"/>`;
+    h+=`<rect x="190" y="${y-14}" width="36" height="28" rx="3" fill="var(--chip)"/><text x="208" y="${y+4}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">AND</text>`;
+    h+=`<line x1="226" y1="${y}" x2="870" y2="${y}" stroke="${col(clk)}" stroke-width="${clk?4:2}" ${clk?'filter="url(#glow)"':''}/>`;
+    h+=`<text x="120" y="${y-8}" font-size="10" fill="var(--muted)">word ${k}</text>`;
+    for(let b=0;b<8;b++){ const x=bx(b), on=(v>>b)&1;
+      h+=`<rect x="${x-17}" y="${y+6}" width="34" height="26" rx="3" fill="#fff" stroke="${sel?'var(--ink)':'#B9C0BE'}" stroke-width="${sel?2:1}"/><circle cx="${x}" cy="${y+19}" r="8" fill="${on?'var(--live)':'#DADFD9'}"/>`; }
+    h+=`<text x="890" y="${y+24}" text-anchor="end" font-size="15" font-family="JetBrains Mono,monospace" fill="var(--ink)">${v}</text>`;
+  }
+  h+=`<text x="200" y="385" font-size="11" fill="var(--muted)">The write line (from the Write button) runs into every AND. Only the row the decoder picked passes it on as a clock edge.</text>`;
+  svg.innerHTML=h;
+  const out=word(M.A);
+  $('#mread').innerHTML=`<div><small>Reading address ${M.A}</small><b>${out}</b><small>binary ${out.toString(2).padStart(8,'0')}</small></div>`+
+    `<div><small>Data switches</small><b>${M.D}</b><small>${M.we||M.setup?'writing…':'not written until you press Write'}</small></div>`+
+    `<div><small>At power-on memory held</small><b style="font-size:16px">${M.startup.join(', ')}</b><small>nobody wrote these</small></div>`;
+  $('#status').textContent='Click address and data bits to set them. The read side (a selector per bit, like your MUX) is drawn as the number on the right of each row. Write waits a few delays before pulsing: data must be steady before the clock edge arrives (setup time), or a flip-flop can catch it mid-change.';
+}
+
+$('#cmode').onclick=()=>{ C.mode=C.mode==='ff'?'latch':'ff'; $('#cmode').textContent='Register built from: '+(C.mode==='ff'?'flip-flops':'transparent latches'); setupCounter(); renderCounter(); };
+$('#chalf').oninput=e=>{ C.half=+e.target.value; };
+$('#cpause').onclick=()=>{ C.paused=!C.paused; $('#cpause').textContent=C.paused?'Run':'Pause'; };
+$('#cstep').onclick=()=>{ C.paused=true; $('#cpause').textContent='Run'; const start=C.caps.length; let n=0; do{ counterTick(); n++; }while(C.caps.length===start&&n<400); renderCounter(); };
+$('#ram').addEventListener('pointerdown',e=>{
+  const a=e.target.closest('[data-abit]'), d=e.target.closest('[data-dbit]');
+  if(a) M.A^=1<<+a.dataset.abit; if(d) M.D^=1<<+d.dataset.dbit;
+  if(a||d){ ramInputs(); renderRam(); }
+});
+$('#mwrite').onclick=()=>{
+  if(M.pulse||M.setup) return;
+  const d=P.chips.DFF?Math.max(...P.chips.DFF.depths):6;
+  M.setup=d+4; M.pulse=Math.max(20,3*d+10);
+  M.writes[M.A]=M.D;
+  if(Object.keys(M.writes).length>=2&&!P.solved.RAM){ setTimeout(()=>{ P.solved.RAM={}; save(); renderSteps(); renderWin(); }, 1500); }
+};
+// ================= Processor station =================
+const HC173 = {name:'74HC173', w:8,
+  bottom:[[1,'M'],[2,'N'],[3,'Q1'],[4,'Q2'],[5,'Q3'],[6,'Q4'],[7,'CLK'],[8,'GND']],
+  top:[[16,'VCC'],[15,'CLR'],[14,'D1'],[13,'D2'],[12,'D3'],[11,'D4'],[10,'G2'],[9,'G1']]};
+const AT28C16 = {name:'AT28C16', w:12,
+  bottom:[[1,'A7'],[2,'A6'],[3,'A5'],[4,'A4'],[5,'A3'],[6,'A2'],[7,'A1'],[8,'A0'],[9,'IO0'],[10,'IO1'],[11,'IO2'],[12,'GND']],
+  top:[[24,'VCC'],[23,'A8'],[22,'A9'],[21,'WE'],[20,'OE'],[19,'A10'],[18,'CE'],[17,'IO7'],[16,'IO6'],[15,'IO5'],[14,'IO4'],[13,'IO3']]};
+
+// The sixteen control lines, in the bit order used by the two EEPROMs.
+const LINES=['HLT','MI','RI','RO','IO','II','AI','AO','EO','SU','BI','OI','CE','CO','J','FI'];
+const LINE_SAYS={HLT:'stop the clock',MI:'bus → memory address register',RI:'bus → RAM at that address',RO:'RAM at that address → bus',
+  IO:'operand (low 4 bits of instruction) → bus',II:'bus → instruction register',AI:'bus → register A',AO:'register A → bus',
+  EO:'adder result → bus',SU:'adder subtracts instead',BI:'bus → register B',OI:'bus → output display',
+  CE:'program counter counts up by one',CO:'program counter → bus',J:'bus → program counter (jump)',FI:'store carry and zero flags'};
+const DRIVERS=new Set(['RO','IO','AO','EO','CO']), READERS=['MI','RI','II','AI','BI','OI','J'];
+const OPS={NOP:0,LDA:1,ADD:2,SUB:3,STA:4,LDI:5,JMP:6,JC:7,JZ:8,OUT:14,HLT:15};
+const OPNAME=Object.fromEntries(Object.entries(OPS).map(([k,v])=>[v,k]));
+const HASARG=new Set(['LDA','ADD','SUB','STA','LDI','JMP','JC','JZ']);
+const OPSAY={NOP:'do nothing',LDA:'load A from address',ADD:'A = A + [address]',SUB:'A = A − [address]',STA:'store A at address',LDI:'load A with the number itself',
+  JMP:'jump to address',JC:'jump if the last add carried',JZ:'jump if the last result was zero',OUT:'show A on the display',HLT:'stop'};
+
+const REF={fetch:[['CO','MI'],['RO','II','CE']], ops:{
+  NOP:[[],[],[]], LDA:[['IO','MI'],['RO','AI'],[]], ADD:[['IO','MI'],['RO','BI'],['EO','AI','FI']],
+  SUB:[['IO','MI'],['RO','BI'],['EO','AI','SU','FI']], STA:[['IO','MI'],['AO','RI'],[]], LDI:[['IO','AI'],[],[]],
+  JMP:[['IO','J'],[],[]], JC0:[[],[],[]], JC1:[['IO','J'],[],[]], JZ0:[[],[],[]], JZ1:[['IO','J'],[],[]],
+  OUT:[['AO','OI'],[],[]], HLT:[['HLT'],[],[]]}};
+const emptyRom=()=>({fetch:[[],[]],ops:Object.fromEntries(Object.keys(REF.ops).map(k=>[k,[[],[],[]]]))});
+
+function linesFor(rom,op,step,c,z){
+  if(step<2) return rom.fetch[step];
+  let k=OPNAME[op]; if(!k) return [];
+  if(k==='JC') k='JC'+c; if(k==='JZ') k='JZ'+z;
+  return (rom.ops[k]||[[],[],[]])[step-2]||[];
+}
+
+// ---------- The machine (register-transfer level) ----------
+// At this level the simulator moves whole numbers between blocks. Every block is a part
+// you built and tested gate by gate at the earlier stations; here we watch them cooperate.
+function newMachine(ram){ return {pc:0,mar:0,ir:0,a:0,b:0,out:null,ram:ram.slice(),step:0,halted:false,c:0,z:0,bus:null,lines:[],wrote:{},conflict:null,floating:false,outs:[]}; }
+function alu(m,sub){ const bb=sub?(~m.b)&255:m.b; const s=m.a+bb+(sub?1:0); return {v:s&255,c:s>255?1:0,z:(s&255)===0?1:0}; }
+function micro(m,rom){
+  if(m.halted) return;
+  const L=linesFor(rom,m.ir>>4,m.step,m.c,m.z), has=x=>L.includes(x);
+  const drv=L.filter(x=>DRIVERS.has(x)), r=alu(m,has('SU'));
+  const val={CO:m.pc,RO:m.ram[m.mar],IO:m.ir&15,AO:m.a,EO:r.v};
+  // Two chips driving the bus at once: on the bench, a short. Here, the 0s win.
+  const bus=drv.length?drv.map(d=>val[d]).reduce((x,y)=>x&y,255):0;
+  m.conflict=drv.length>1?drv:null; m.floating=!drv.length&&L.some(x=>READERS.includes(x));
+  m.bus=drv.length?bus:null; m.lines=L; m.wrote={};
+  const oldMar=m.mar, w=k=>m.wrote[k]=1;
+  if(has('MI')){ m.mar=bus&15; w('mar'); }
+  if(has('RI')){ m.ram[oldMar]=bus; w('ram'); }
+  if(has('II')){ m.ir=bus; w('ir'); }
+  if(has('AI')){ m.a=bus; w('a'); }
+  if(has('BI')){ m.b=bus; w('b'); }
+  if(has('OI')){ m.out=bus; m.outs.push(bus); w('out'); }
+  if(has('FI')){ m.c=r.c; m.z=r.z; w('flags'); }
+  if(has('CE')){ m.pc=(m.pc+1)&15; w('pc'); }
+  if(has('J')){ m.pc=bus&15; w('pc'); }
+  if(has('HLT')) m.halted=true;
+  m.step=(m.step+1)%5;
+}
+function assemble(text){
+  const ram=Array(16).fill(0), errors=[]; let addr=0;
+  text.split('\n').forEach((raw,li)=>{
+    let line=raw.replace(/[#;].*/,'').trim(); if(!line) return;
+    const at=line.match(/^(\d+)\s*:\s*(.*)$/); if(at){ addr=+at[1]; line=at[2].trim(); if(!line) return; }
+    if(addr>15){ errors.push(`Line ${li+1}: memory only has addresses 0 to 15.`); return; }
+    const [t0,t1]=line.toUpperCase().split(/\s+/);
+    if(/^\d+$/.test(t0)){ const v=+t0; if(v>255) errors.push(`Line ${li+1}: ${v} does not fit in 8 bits (0–255).`); ram[addr++]=v&255; return; }
+    if(!(t0 in OPS)){ errors.push(`Line ${li+1}: “${t0}” is not an instruction this machine knows.`); return; }
+    const arg=t1==null?0:+t1;
+    if(HASARG.has(t0)&&(t1==null||isNaN(arg)||arg>15)) errors.push(`Line ${li+1}: ${t0} needs a number from 0 to 15 after it.`);
+    ram[addr++]=(OPS[t0]<<4)|(arg&15);
+  });
+  return {ram,errors};
+}
+const disasm=v=>{ const n=OPNAME[v>>4]; return n?(HASARG.has(n)?`${n} ${v&15}`:n):'—'; };
+const bin8=v=>v.toString(2).padStart(8,'0');
+
+const EXAMPLES={
+  'Add two numbers':'LDA 14   # A = the number in cell 14\nADD 15   # A = A + the number in cell 15\nOUT\nHLT\n14: 28\n15: 14',
+  'Count forever':'LDI 1\nSTA 15   # cell 15 holds the step size\nLDI 0\nADD 15\nOUT\nJMP 3',
+  'Count down to zero':'LDI 5\nSTA 14\nLDI 1\nSTA 15\nLDA 14\nOUT\nSUB 15\nSTA 14\nJZ 10\nJMP 4\nOUT\nHLT',
+  'Code that rewrites itself':'LDA 15   # load a number\nADD 14\nSTA 15   # write it back...\nOUT\nJMP 1\n14: 16\n15: 0\n# Watch cell 15. Then try: change 16 to 1 and\n# point STA at cell 3 instead. What happens?'
+};
+
+// ---------- Single-step view ----------
+const U={m:null,prog:EXAMPLES['Add two numbers'],running:false,useMine:false,log:[]};
+function romInUse(){ return U.useMine&&P.rom?P.rom:REF; }
+function setupCpu(){
+  if(!$('#cprog').value) $('#cprog').value=U.prog;
+  const {ram,errors}=assemble($('#cprog').value);
+  $('#cerr').textContent=errors.join(' ');
+  U.m=newMachine(ram); U.running=false; $('#crun').textContent='Run';
+  $('#cmine').disabled=!P.rom; $('#cmine').textContent='Control: '+(U.useMine&&P.rom?'your ROM':'working reference');
+}
+function cpuMicro(){
+  const m=U.m; if(m.halted){ U.running=false; $('#crun').textContent='Run'; return; }
+  micro(m,romInUse());
+  if(m.halted&&!P.solved.CPU){ P.solved.CPU={}; save(); renderSteps(); renderWin(); }
+}
+function sayStep(m){
+  if(!m.lines.length&&m.bus==null) return m.halted?'Halted.':'Nothing happened on that step.';
+  const who={CO:'the program counter',RO:'memory',IO:'the instruction register (its low four bits)',AO:'register A',EO:'the adder'};
+  const takes={MI:'the memory address register',RI:'memory',II:'the instruction register',AI:'register A',BI:'register B',OI:'the output display',J:'the program counter'};
+  let s='';
+  const drv=m.lines.filter(x=>DRIVERS.has(x)), rd=m.lines.filter(x=>takes[x]);
+  if(drv.length) s+=`${drv.map(d=>who[d]).join(' and ')} put ${m.bus} on the bus`;
+  if(rd.length) s+=(s?'; ':'')+`${rd.map(x=>takes[x]).join(' and ')} took it`;
+  if(m.lines.includes('CE')) s+=(s?'; ':'')+'the program counter counted up';
+  if(m.lines.includes('FI')) s+=(s?'; ':'')+'the flags were stored';
+  if(m.lines.includes('HLT')) s+=(s?'; ':'')+'the clock stopped';
+  if(m.conflict) s+='. Warning: two things drove the bus at once.';
+  return s.charAt(0).toUpperCase()+s.slice(1)+'.';
+}
+function renderCpu(){
+  const m=U.m; if(!m) return;
+  const L=new Set(m.lines), on=k=>L.has(k);
+  let h=GLOW;
+  const blk=(x,y,w,hh,name,val,sub,written,ins,outs)=>{
+    const active=ins.some(on)||outs.some(on);
+    h+=`<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="4" fill="${written?'#FFF3CC':'#fff'}" stroke="${active?'var(--live)':'var(--ink)'}" stroke-width="${active?3:1.5}"/>`;
+    h+=`<text x="${x+10}" y="${y+18}" font-size="12" font-weight="600" fill="var(--muted)">${name}</text>`;
+    h+=`<text x="${x+w-10}" y="${y+22}" text-anchor="end" font-size="20" font-family="JetBrains Mono,monospace" fill="var(--ink)">${val}</text>`;
+    if(sub) h+=`<text x="${x+w-10}" y="${y+hh-8}" text-anchor="end" font-size="11" font-family="JetBrains Mono,monospace" fill="var(--muted)">${sub}</text>`;
+    const lx=x<450?x+w:x, bx=x<450?430:470, yy=y+hh/2, lit=ins.some(on)||outs.some(on);
+    h+=`<line x1="${lx}" y1="${yy}" x2="${bx}" y2="${yy}" stroke="${lit?'var(--live)':'var(--wire)'}" stroke-width="${lit?4:2}" ${lit?'filter="url(#glow)"':''}/>`;
+    const tags=[...outs,...ins]; tags.forEach((t,i)=>{ const tx=x<450?x+w+6+i*26:x-30-i*26;
+      h+=`<text x="${tx}" y="${yy-6}" font-size="10" font-weight="${on(t)?700:400}" fill="${on(t)?'var(--ink)':'#aab'}">${t}</text>`; });
+  };
+  // the bus
+  h+=`<rect x="430" y="20" width="40" height="470" rx="4" fill="${m.bus!=null?'var(--live)':'#E2E6E0'}" ${m.bus!=null?'filter="url(#glow)"':''}/>`;
+  h+=`<text x="450" y="14" text-anchor="middle" font-size="11" fill="var(--muted)">bus</text>`;
+  h+=`<text x="450" y="260" text-anchor="middle" font-size="15" font-weight="700" fill="var(--ink)" transform="rotate(-90 450 260)">${m.bus==null?'nobody is driving':m.bus+'   '+bin8(m.bus)}</text>`;
+  blk(120,30,220,54,'Program counter',m.pc,'next instruction address',m.wrote.pc,['J'],['CO']);
+  blk(120,110,220,54,'Memory address reg.',m.mar,'',m.wrote.mar,['MI'],[]);
+  blk(120,190,220,70,'RAM at that address',m.ram[m.mar],bin8(m.ram[m.mar])+'  '+disasm(m.ram[m.mar]),m.wrote.ram,['RI'],['RO']);
+  blk(120,290,220,70,'Instruction register',m.ir,bin8(m.ir)+'  '+disasm(m.ir),m.wrote.ir,['II'],['IO']);
+  blk(560,30,220,54,'Register A',m.a,bin8(m.a),m.wrote.a,['AI'],['AO']);
+  const r=alu(m,on('SU'));
+  blk(560,110,220,70,'Your adder (A '+(on('SU')?'−':'+')+' B)',r.v,'carry '+r.c+'  zero '+r.z,false,[],['EO']);
+  blk(560,210,220,54,'Register B',m.b,bin8(m.b),m.wrote.b,['BI'],[]);
+  blk(560,290,220,70,'Output display',m.out==null?'—':m.out,m.out==null?'':bin8(m.out),m.wrote.out,['OI'],[]);
+  blk(560,390,220,54,'Flags',`C${m.c} Z${m.z}`,'',m.wrote.flags,['FI'],[]);
+  // control unit
+  const stepShown=(m.step+4)%5;
+  h+=`<rect x="120" y="390" width="220" height="100" rx="4" fill="var(--chip)"/>`;
+  h+=`<text x="132" y="410" font-size="12" font-weight="600" fill="#ccc">Control: ${U.useMine&&P.rom?'your ROM':'reference'}</text>`;
+  for(let s=0;s<5;s++) h+=`<rect x="${132+s*40}" y="420" width="34" height="24" rx="3" fill="${s===stepShown&&m.lines.length+1?'var(--live)':'#444'}"/><text x="${149+s*40}" y="437" text-anchor="middle" font-size="12" fill="#fff">T${s}</text>`;
+  h+=`<text x="132" y="470" font-size="11" fill="#ccc">T0–T1 fetch · T2–T4 ${OPNAME[m.ir>>4]||'?'}</text>`;
+  $('#cpu').innerHTML=h;
+  $('#cword').innerHTML=LINES.map(l=>`<span class="cl ${L.has(l)?'on':''}" title="${LINE_SAYS[l]}">${l}</span>`).join('');
+  $('#csay').textContent=(m.halted?'The machine has halted. ':'')+sayStep(m);
+  $('#cmem').innerHTML='<tr><th>addr</th><th>bits</th><th>as instruction</th><th>as number</th></tr>'+m.ram.map((v,i)=>
+    `<tr class="${i===m.pc?'now':''}" style="${i===m.mar?'outline:2px solid var(--live)':''}"><td>${i}${i===m.pc?' ◀ PC':''}</td><td>${bin8(v)}</td><td>${disasm(v)}</td><td>${v}</td></tr>`).join('');
+  $('#status').textContent=`Outputs so far: ${m.outs.join(', ')||'none'}. Highlighted row: where the next instruction will be fetched from. Outlined row: the address the memory is currently pointed at.`;
+}
+
+// ---------- Control ROM view ----------
+const LEVELS=[
+ {name:'Fetch',rows:['F'],fields:['pc','ir'],
+  say:'Every instruction starts the same way: get the next instruction out of memory and into the instruction register, and point the program counter at the one after. Fill in steps T0 and T1. You have no instructions yet, so the test only checks that each one is fetched.',
+  tests:[{name:'Fetch four instructions in a row',prog:'LDA 9\nADD 10\nSUB 11\nLDI 7',instr:4}]},
+ {name:'Load, show, stop',rows:['LDA','OUT','HLT'],
+  say:'LDA 14 means: put the number in cell 14 into register A. OUT shows A. HLT stops. Steps T2–T4 are yours. The instruction register holds the address (its low four bits); IO puts those bits on the bus.',
+  tests:[{name:'Load 42 and show it',prog:'LDA 14\nOUT\nHLT\n14: 42',instr:10}]},
+ {name:'Add and subtract',rows:['ADD','SUB'],
+  say:'The adder is permanently wired to A and B and always shows A+B. ADD 15 must fetch the number from cell 15 into B, then put the adder’s answer back into A. Store the flags when you do; the jumps will need them.',
+  tests:[{name:'28 + 14, then back',prog:'LDA 14\nADD 15\nOUT\nSUB 15\nOUT\nHLT\n14: 28\n15: 14',instr:12}]},
+ {name:'Store, load a number, jump',rows:['LDI','STA','JMP'],
+  say:'LDI 5 puts the number 5 itself into A, not the contents of cell 5. STA 15 writes A into cell 15. JMP 3 makes the next instruction come from address 3.',
+  tests:[{name:'Count 1, 2, 3, 4, 5…',prog:EXAMPLES['Count forever'],instr:30}]},
+ {name:'Decide',rows:['JC','JZ'],
+  say:'A conditional jump is two rows: what to do when the flag is 0, and what to do when it is 1. The flags are wired into the ROM’s address lines, so the ROM literally looks up a different row. This is where the machine becomes able to decide.',
+  tests:[{name:'Count down to zero, then stop',prog:EXAMPLES['Count down to zero'],instr:80},
+         {name:'Add 60 until it overflows',prog:'LDA 14\nADD 15\nJC 5\nOUT\nJMP 1\nHLT\n14: 0\n15: 60',instr:80}]}
+];
+function rowKeys(level){
+  const out=[];
+  for(const r of LEVELS[level].rows){
+    if(r==='F') out.push(['F',0],['F',1]);
+    else if(r==='JC'||r==='JZ') for(const f of [0,1]) for(let s=0;s<3;s++) out.push([r+f,s]);
+    else for(let s=0;s<3;s++) out.push([r,s]);
+  }
+  return out;
+}
+const cellGet=(rom,k,s)=>k==='F'?rom.fetch[s]:rom.ops[k][s];
+function rowLabel(k,s){
+  if(k==='F') return `Fetch T${s}`;
+  const base=k.replace(/[01]$/,''), f=k.match(/[01]$/);
+  return `${base}${f?` (${base==='JC'?'C':'Z'}=${f[0]})`:''} T${s+2}`;
+}
+function renderRom(){
+  P.rom ||= emptyRom(); P.romLevel ||= 0;
+  const lv=P.romLevel;
+  $('#rlevels').innerHTML=LEVELS.map((L,i)=>`<button class="btn ${i===U.showLevel?'dark':''}" data-lv="${i}" ${i>lv?'disabled':''}>${i+1}. ${L.name}${i<lv||P.solved.ROM?' ✓':''}</button>`).join('');
+  const L=LEVELS[U.showLevel];
+  $('#rsay').innerHTML=L.say+(L.rows.includes('F')?'':` <span style="color:var(--muted)">Instructions: ${L.rows.map(r=>`<b>${r}</b> = ${OPSAY[r]}`).join('; ')}.</span>`);
+  let t='<tr><th></th>'+LINES.map(l=>`<th title="${LINE_SAYS[l]}">${l}</th>`).join('')+'</tr>';
+  for(const [k,s] of rowKeys(U.showLevel)){
+    const cell=cellGet(P.rom,k,s);
+    t+=`<tr><td class="rl">${rowLabel(k,s)}</td>`+LINES.map(l=>`<td><button class="rc ${cell.includes(l)?'on':''} ${DRIVERS.has(l)?'drv':''}" data-k="${k}" data-s="${s}" data-l="${l}" aria-pressed="${cell.includes(l)}" aria-label="${rowLabel(k,s)}: ${l}"></button></td>`).join('')+'</tr>';
+  }
+  $('#rgrid').innerHTML=t;
+  $('#rlegend').innerHTML=LINES.map(l=>`<span><b>${l}</b> ${LINE_SAYS[l]}</span>`).join('');
+  $('#rexport').style.display=P.solved.ROM?'':'none';
+  $('#status').textContent='Click a cell to switch that control line on for that step. Hover a column name for what the line does. Lines that put something on the bus are marked with a darker outline: only one of those per step.';
+}
+$('#rgrid').addEventListener('click',e=>{
+  const b=e.target.closest('.rc'); if(!b) return;
+  const cell=cellGet(P.rom,b.dataset.k,+b.dataset.s), l=b.dataset.l, i=cell.indexOf(l);
+  if(i>=0) cell.splice(i,1); else cell.push(l);
+  save(); renderRom();
+});
+$('#rlevels').addEventListener('click',e=>{ const b=e.target.closest('[data-lv]'); if(b&&!b.disabled){ U.showLevel=+b.dataset.lv; $('#rreport').innerHTML=''; renderRom(); } });
+
+// Run the reader's ROM and a working one side by side. Compare them after every
+// instruction; the first difference points at the row that is wrong.
+function runTest(test,fields){
+  const {ram}=assemble(test.prog), me=newMachine(ram), ref=newMachine(ram);
+  const F=fields||['pc','ir','mar','a','b','out','c','z','halted','ram'];
+  for(let n=0;n<test.instr;n++){
+    const at=ref.pc, instr=disasm(ref.ram[at]);
+    for(let s=0;s<5;s++){
+      micro(me,P.rom); micro(ref,REF);
+      const where=s<2?`the fetch of ${instr} (address ${at}), step T${s}`:`${instr} (address ${at}), step T${s}`;
+      if(me.conflict) return {ok:false,msg:`During ${where}, ${me.conflict.join(' and ')} drove the bus at the same time. On the bench that is two chips fighting through the same wires: the result is garbage and the chips get hot. Only one line that puts something on the bus may be on in any step.`};
+      if(me.floating) return {ok:false,msg:`During ${where}, something read the bus (${me.lines.filter(x=>READERS.includes(x)).join(', ')}) but nothing was driving it. On the bench a bus nobody drives reads as random noise.`};
+    }
+    const names={pc:'the program counter',ir:'the instruction register',mar:'the memory address register',a:'register A',b:'register B',out:'the display',c:'the carry flag',z:'the zero flag',halted:'halted',ram:'memory'};
+    for(const f of F){
+      const x=f==='ram'?me.ram.join():me[f], y=f==='ram'?ref.ram.join():ref[f];
+      if(x!==y){
+        const shown=f==='ram'?`memory differs at cell ${me.ram.findIndex((v,i)=>v!==ref.ram[i])}`:f==='halted'?(me.halted?'your machine stopped when it should not have':'your machine kept going when it should have stopped'):`${names[f]} is ${x==null?'blank':x}; it should be ${y==null?'blank':y}`;
+        const flagNote=(f==='c'||f==='z')?' Only instructions that do arithmetic should store the flags.':'';
+        return {ok:false,msg:`After ${F.length===2?'fetching':'running'} <b>${instr}</b> from address ${at}: ${shown}.${flagNote} Step through it in the processor view with your ROM to watch where it goes wrong.`};
+      }
+    }
+    if(ref.halted) break;
+  }
+  return {ok:true,msg:`Passed. Display showed: ${ref.outs.join(', ')||'nothing (nothing to show yet)'}.`};
+}
+$('#rtest').onclick=()=>{
+  const L=LEVELS[U.showLevel];
+  const results=L.tests.map(t=>({t,r:runTest(t,L.fields)}));
+  $('#rreport').innerHTML=results.map(({t,r})=>`<div class="${r.ok?'win':'hint'}" style="margin-top:6px"><b>${t.name}.</b> ${r.msg}</div>`).join('');
+  if(results.every(x=>x.r.ok)&&U.showLevel===P.romLevel){
+    if(P.romLevel<LEVELS.length-1){ P.romLevel++; U.showLevel=P.romLevel; $('#rreport').innerHTML+=`<div class="win" style="margin-top:6px">Next: ${LEVELS[P.romLevel].name}. Your earlier rows stay in the ROM.</div>`; }
+    else if(!P.solved.ROM){ P.solved.ROM={}; }
+    save(); renderSteps(); renderRom(); renderWin();
+  }
+};
+$('#rwatch').onclick=()=>{ U.useMine=true; loadChallenge('CPU'); };
+
+// ---------- EEPROM images ----------
+// Address = Z(1 bit) C(1 bit) opcode(4 bits) step(3 bits): 9 bits, 512 words.
+// Chip 1 holds the high byte of each control word, chip 2 the low byte.
+function romImages(){
+  const hi=new Uint8Array(2048), lo=new Uint8Array(2048);
+  for(let z=0;z<2;z++) for(let c=0;c<2;c++) for(let op=0;op<16;op++) for(let s=0;s<8;s++){
+    const L=s<5?linesFor(P.rom,op,s,c,z):[];
+    let w=0; LINES.forEach((l,i)=>{ if(L.includes(l)) w|=1<<(15-i); });
+    const a=(z<<8)|(c<<7)|(op<<3)|s; hi[a]=w>>8; lo[a]=w&255;
+  }
+  return {hi,lo};
+}
+function dl(bytes,name){ const u=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'})); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),2000); }
+$('#rhi').onclick=()=>dl(romImages().hi,'control-rom-1-high.bin');
+$('#rlo').onclick=()=>dl(romImages().lo,'control-rom-2-low.bin');
+$('#rcode').onclick=()=>{
+  const {hi,lo}=romImages(), fmt=b=>[...b.slice(0,512)].map(x=>'0x'+x.toString(16).padStart(2,'0')).join(',');
+  $('#rtext').value=`// Control ROM for the Bench Computer: 512 bytes per chip (the rest of each 2 KB chip is unused).\n// Address = Z<<8 | C<<7 | opcode<<3 | step\nconst uint8_t rom1_high[512] = {${fmt(hi)}};\nconst uint8_t rom2_low[512] = {${fmt(lo)}};`;
+  $('#rtext').style.display='block'; $('#rtext').select();
+};
+
+CH.push(
+ {id:'CPU', st:'cpu', view:'cpu', title:'Watch the machine', req:'RAM', ins:[], outs:[],
+  text:'Everything you built, arranged around one shared set of wires, the bus. Each block is a part from your bin: registers of your flip-flops, your adder, your memory. A control unit switches the right lines on at each step. <b>Step through a program and watch.</b>',
+  hints:['Step through the first two steps (T0, T1) of several different instructions. They are identical every time. Why must they be?',
+    'The program counter only ever counts up by one, unless a jump overwrites it. Is that all “control flow” is?',
+    'Look at the memory table: every cell has both an “as instruction” and an “as number” reading. Which one is true? Try “Code that rewrites itself”.'],
+  winTitle:'The machine ran your program to the end.',
+  why:'Fetch, then execute, forever: the program counter supplies an address, memory supplies a byte, the byte is decoded into switch settings. Nothing in the hardware knows which cells are instructions and which are data. A number becomes an instruction only by being fetched. That is the stored-program idea from Part One, made of your own parts. The only piece you have not built is the control unit. That is next, and it is the piece that turns wiring into a computer.',
+  chip:HC173, bench:'The Bench Computer’s registers are 74HC173s (4 bits each, so two per register) whose outputs can switch off the bus when not selected: that is what “A out” means electrically. The program counter is a 74HC161 counter, the output display a register driving a seven-segment decoder. Build it on eight long breadboards along one shared 8-wire bus.'},
+ {id:'ROM', st:'cpu', view:'rom', title:'Write the control ROM', req:'CPU', ins:[], outs:[],
+  text:'The control unit is a table: for each instruction and each step, which lines are on. You write it. When it is complete, <b>it becomes the program you burn into the real chips</b>.',
+  hints:['Think in bus transfers. For each step ask: who puts a value on the bus, and who takes it? That is one line that ends in O and one or more that end in I.',
+    'Fetch T0: the program counter’s value must reach the memory address register. Fetch T1: memory’s value must reach the instruction register, and the counter should move on.',
+    'An instruction like LDA 14 needs two trips across the bus: first the address 14 to the memory address register, then the memory’s contents to A.',
+    'For JC: when C=0 do nothing at all; when C=1, the same as JMP.'],
+  winTitle:'You wrote a working control unit.',
+  why:'An instruction is not a thing the hardware understands. It is an address into this table, and the row it selects is a set of switch settings applied one clock step at a time. “ADD” means nothing more than “in step T2 connect these wires, in T3 those, in T4 those”. The mystery of how a machine “knows” what an instruction means is gone: it looks it up. Designing an instruction set is deciding which rows to write, which is the next chapter.',
+  chip:AT28C16, bench:'Burn the two downloaded images into two AT28C16 EEPROMs (a TL866 programmer, or an Arduino with shift registers as in Ben Eater’s build). Wire A0–A2 to the step counter, A3–A6 to the instruction register’s top four bits, A7 to the carry flag and A8 to the zero flag. Chip 1’s eight outputs are HLT, MI, RI, RO, IO, II, AI, AO; chip 2’s are EO, SU, BI, OI, CE, CO, J, FI. Several of these chips’ inputs are active-low: invert those lines with a 74HC04 rather than changing the ROM.'}
+);
+STATIONS.push({id:'cpu',name:'CPU',req:'RAM'});
+
+$('#cstepb').onclick=()=>{ U.running=false; $('#crun').textContent='Run'; cpuMicro(); renderCpu(); };
+$('#cinstr').onclick=()=>{ U.running=false; $('#crun').textContent='Run'; let n=0; do{ cpuMicro(); n++; }while(U.m.step!==0&&!U.m.halted&&n<5); renderCpu(); };
+$('#crun').onclick=()=>{ U.running=!U.running; $('#crun').textContent=U.running?'Pause':'Run'; };
+$('#creset').onclick=()=>{ setupCpu(); renderCpu(); };
+$('#cload').onclick=()=>{ U.prog=$('#cprog').value; setupCpu(); renderCpu(); };
+$('#cmine').onclick=()=>{ U.useMine=!U.useMine; setupCpu(); renderCpu(); };
+$('#cex').innerHTML='<option value="">Example programs…</option>'+Object.keys(EXAMPLES).map(k=>`<option>${k}</option>`).join('');
+$('#cex').onchange=e=>{ if(!e.target.value) return; $('#cprog').value=EXAMPLES[e.target.value]; e.target.value=''; setupCpu(); renderCpu(); };
+
+// ================= Instruction set: the bit budget and hand assembly =================
+const HC157 = {name:'74HC157', w:8,
+  bottom:[[1,'S'],[2,'1A'],[3,'1B'],[4,'1Y'],[5,'2A'],[6,'2B'],[7,'2Y'],[8,'GND']],
+  top:[[16,'VCC'],[15,'E'],[14,'4A'],[13,'4B'],[12,'4Y'],[11,'3A'],[10,'3B'],[9,'3Y']]};
+
+const WISH=[
+  ['NOP','do nothing'],['LDA','load A from memory'],['ADD','add from memory'],['SUB','subtract from memory'],
+  ['STA','store A to memory'],['LDI','load a small number'],['JMP','jump'],['JC','jump if carry'],['JZ','jump if zero'],
+  ['OUT','show A'],['HLT','stop'],['AND','keep only shared bits'],['OR','combine bits'],['SHL','shift left (double)'],
+  ['CALL','go to a subroutine'],['RET','come back from it'],['LDX','load from the address held in a cell']];
+// Each job: instructions it needs; how many of its instructions take an operand and how many do not; data cells.
+const JOBS=[
+  {name:'Add two numbers',ops:['LDA','ADD','OUT','HLT'],withArg:2,noArg:2,data:2},
+  {name:'Count down from 5',ops:['LDI','STA','LDA','OUT','SUB','JZ','JMP','HLT'],withArg:8,noArg:4,data:2},
+  {name:'Is this number odd?',ops:['LDA','AND','JZ','LDI','OUT','HLT'],withArg:4,noArg:3,data:2},
+  {name:'Multiply 7 × 6',ops:['LDA','ADD','STA','SUB','JZ','JMP','OUT','HLT'],withArg:11,noArg:2,data:4},
+  {name:'Sum a list of 20 numbers',ops:['LDX','ADD','STA','LDA','SUB','JZ','JMP','OUT','HLT'],withArg:12,noArg:2,data:23},
+];
+const B={k:4,two:false,chosen:new Set(['NOP','LDA','ADD','SUB','STA','LDI','JMP','JC','JZ','OUT','HLT'])};
+function bbStats(){
+  const slots=B.two?256:1<<B.k, mem=B.two?256:1<<(8-B.k);
+  return {slots,mem,maxImm:B.two?255:(1<<(8-B.k))-1};
+}
+function jobVerdict(j){
+  const st=bbStats(), missing=j.ops.filter(o=>!B.chosen.has(o));
+  const bytes=B.two?2*j.withArg+j.noArg+j.data:j.withArg+j.noArg+j.data;
+  const steps=B.two?j.withArg*7+j.noArg*5:(j.withArg+j.noArg)*5;
+  return {missing,bytes,steps,fits:!missing.length&&bytes<=st.mem};
+}
+function renderIsa(){
+  const st=bbStats(); let h='';
+  // the instruction word
+  const bitsN=8, cw=86, x0=106;
+  h+=`<text x="450" y="24" text-anchor="middle" font-size="14" fill="var(--muted)">${B.two?'First byte: which instruction. Second byte: its operand.':'One byte per instruction. Drag the divider, or use the buttons below.'}</text>`;
+  for(let i=0;i<bitsN;i++){
+    const op=B.two||i<B.k, x=x0+i*cw;
+    h+=`<rect x="${x}" y="40" width="${cw-6}" height="64" rx="4" fill="${op?'var(--ink)':'#FFF3CC'}" stroke="var(--ink)" stroke-width="1.5" data-kbit="${i}" style="cursor:pointer"/>`;
+    h+=`<text x="${x+(cw-6)/2}" y="80" text-anchor="middle" font-size="13" font-weight="600" fill="${op?'#fff':'var(--ink)'}" pointer-events="none">bit ${7-i}</text>`;
+  }
+  if(!B.two){
+    const dx=x0+B.k*cw-3;
+    h+=`<line x1="${dx}" y1="30" x2="${dx}" y2="116" stroke="var(--live)" stroke-width="5"/>`;
+    h+=`<text x="${x0+B.k*cw/2}" y="134" text-anchor="middle" font-size="13" fill="var(--ink)">${B.k} bits choose the instruction</text>`;
+    h+=`<text x="${x0+B.k*cw+(8-B.k)*cw/2}" y="134" text-anchor="middle" font-size="13" fill="var(--ink)">${8-B.k} bits say which address</text>`;
+  } else {
+    for(let i=0;i<bitsN;i++){ const x=x0+i*cw; h+=`<rect x="${x}" y="146" width="${cw-6}" height="40" rx="4" fill="#FFF3CC" stroke="var(--ink)" stroke-width="1.5"/>`; }
+    h+=`<text x="450" y="206" text-anchor="middle" font-size="13" fill="var(--ink)">8 more bits for the address: up to 256 bytes</text>`;
+  }
+  // the fixed-product chart
+  const cy=B.two?250:180;
+  h+=`<text x="${x0}" y="${cy+26}" font-size="13" font-weight="600" fill="var(--ink)">Every way to split one byte</text>`;
+  for(let k=1;k<=7;k++){
+    const y=cy+36+(k-1)*26, inst=1<<k, mem=1<<(8-k), sel=!B.two&&k===B.k;
+    h+=`<text x="${x0}" y="${y+14}" font-size="12" fill="var(--muted)">${k} + ${8-k}</text>`;
+    h+=`<rect x="${x0+50}" y="${y+2}" width="${inst*1.4}" height="16" fill="${sel?'var(--ink)':'#9AA3A8'}"/><text x="${x0+56+inst*1.4}" y="${y+14}" font-size="11" fill="var(--ink)">${inst} instructions</text>`;
+    h+=`<rect x="${x0+460}" y="${y+2}" width="${mem*1.4}" height="16" fill="${sel?'var(--live)':'#E3D9B8'}"/><text x="${x0+466+mem*1.4}" y="${y+14}" font-size="11" fill="var(--ink)">${mem} bytes</text>`;
+  }
+  $('#isa').setAttribute('viewBox',`0 0 900 ${B.two?470:400}`);
+  $('#isa').innerHTML=h;
+  $('#ishow').innerHTML=`<div><small>Instructions possible</small><b>${st.slots}</b><small>${B.chosen.size} chosen below</small></div>`+
+    `<div><small>Memory it can address</small><b>${st.mem}</b><small>bytes</small></div>`+
+    `<div><small>Biggest number LDI can load</small><b>${st.maxImm}</b><small>it must fit in the operand</small></div>`;
+  $('#iops').innerHTML=WISH.map(([o,say])=>`<button class="btn ${B.chosen.has(o)?'dark':''}" data-op="${o}" title="${say}">${o}</button>`).join('')+
+    `<span style="font-size:13px;color:${B.chosen.size>st.slots?'var(--bad)':'var(--muted)'}">${B.chosen.size} of ${st.slots} slots used${B.chosen.size>st.slots?': too many for this split':''}</span>`;
+  const over=B.chosen.size>st.slots;
+  let allFit=!over;
+  $('#ijobs').innerHTML=JOBS.map(j=>{
+    const v=jobVerdict(j), ok=v.fits&&!over; if(!ok) allFit=false;
+    const why=over?'the instruction list does not fit':v.missing.length?`missing ${v.missing.join(', ')}`:v.bytes>st.mem?`needs ${v.bytes} bytes, only ${st.mem} addressable`:'fits';
+    return `<div class="job ${ok?'ok':'no'}"><b>${j.name}</b><span>${ok?'✓ ':'✗ '}${why}</span><small>${v.bytes} bytes, ${v.steps} clock steps per pass</small></div>`;
+  }).join('');
+  if(allFit&&!P.solved.ISA){ P.solved.ISA={}; save(); renderSteps(); renderWin(); }
+  $('#status').textContent=B.two?'Two-byte instructions: more of everything, paid for with bigger programs and an extra memory trip for every operand.':'The same 8 wires must carry both the choice of instruction and the address. Move the divider and watch what each side gains and loses.';
+}
+$('#isa').addEventListener('pointerdown',e=>{ const b=e.target.closest('[data-kbit]'); if(!b||B.two) return; B.k=Math.max(1,Math.min(7,+b.dataset.kbit+1)); renderIsa(); });
+$('#iless').onclick=()=>{ B.two=false; B.k=Math.max(1,B.k-1); renderIsa(); };
+$('#imore').onclick=()=>{ B.two=false; B.k=Math.min(7,B.k+1); renderIsa(); };
+$('#itwo').onclick=()=>{ B.two=!B.two; $('#itwo').textContent=B.two?'Back to one byte':'Use two bytes per instruction'; renderIsa(); };
+$('#iops').addEventListener('click',e=>{ const b=e.target.closest('[data-op]'); if(!b) return; const o=b.dataset.op; B.chosen.has(o)?B.chosen.delete(o):B.chosen.add(o); renderIsa(); });
+
+// ---------- Hand assembly ----------
+const HAND_EX={
+  'Add two numbers':'LDA 14\nADD 15\nOUT\nHLT\n14: 28\n15: 14',
+  'Count down from 5':EXAMPLES['Count down to zero']
+};
+const HA={name:'Add two numbers',cells:null,set:{}};
+function handTargets(){
+  const text=HAND_EX[HA.name], {ram}=assemble(text), lines=[];
+  let addr=0; text.split('\n').forEach(raw=>{ let l=raw.replace(/[#;].*/,'').trim(); if(!l) return; const m=l.match(/^(\d+)\s*:\s*(.*)$/); if(m){addr=+m[1]; l=m[2].trim();} lines.push({addr,src:l,val:ram[addr]}); addr++; });
+  return lines;
+}
+function renderHand(){
+  const T=handTargets();
+  HA.set[HA.name] ||= {};
+  const S2=HA.set[HA.name];
+  $('#hsel').innerHTML=Object.keys(HAND_EX).map(k=>`<button class="btn ${k===HA.name?'dark':''}" data-hex="${k}">${k}</button>`).join('');
+  $('#hrows').innerHTML='<tr><th>address</th><th>assembly</th><th colspan="8">data switches: instruction bits, then operand bits</th><th></th></tr>'+T.map(t=>{
+    const v=S2[t.addr]||0, ok=v===t.val;
+    return `<tr><td>${t.addr.toString(2).padStart(4,'0')} <span style="color:var(--muted)">(${t.addr})</span></td><td style="text-align:left">${t.src}</td>`+
+      [...Array(8)].map((_,i)=>{ const b=7-i, on=(v>>b)&1; return `<td><button class="sw ${on?'on':''} ${b>=4?'opb':''}" data-a="${t.addr}" data-b="${b}" aria-pressed="${!!on}" aria-label="address ${t.addr} bit ${b}">${on}</button></td>`; }).join('')+
+      `<td>${ok?'<span class="ok">✓</span>':''}</td></tr>`;
+  }).join('');
+  $('#hops').innerHTML=Object.entries(OPS).map(([k,v])=>`<span><b>${v.toString(2).padStart(4,'0')}</b> ${k}</span>`).join('');
+  const done=T.every(t=>(S2[t.addr]||0)===t.val);
+  $('#hrun').disabled=!done;
+  if(done&&!P.solved.HAND){ P.solved.HAND={}; save(); renderSteps(); renderWin(); }
+  $('#status').textContent=done?'Every switch is right. These are exactly the positions you will set on the Bench Computer.':'Set each row’s eight switches. The top four bits are the instruction from the table below; the bottom four are the number after it, in binary. Plain numbers use all eight bits.';
+}
+$('#hrows').addEventListener('click',e=>{ const b=e.target.closest('.sw'); if(!b) return; const S2=HA.set[HA.name], a=+b.dataset.a; S2[a]=(S2[a]||0)^(1<<+b.dataset.b); renderHand(); });
+$('#hsel').addEventListener('click',e=>{ const b=e.target.closest('[data-hex]'); if(!b) return; HA.name=b.dataset.hex; renderHand(); });
+$('#hrun').onclick=()=>{ $('#cprog').value=HAND_EX[HA.name]; U.useMine=!!P.solved.ROM; loadChallenge('CPU'); };
+
+CH.push(
+ {id:'ISA', st:'cpu', view:'isa', title:'The bit budget', req:'ROM', ins:[], outs:[],
+  text:'Your machine splits each byte into 4 bits of instruction and 4 bits of address. That was a choice. <b>Find an instruction format that runs all five jobs below.</b>',
+  hints:['Try to run the multiplication. It needs 17 bytes and your machine can address 16. What would you have to give up to get more memory?',
+    'Move the divider one bit to the right: 32 bytes, but only 8 instructions. Can you choose 8 that still run most jobs?',
+    'Look at the chart: however you split one byte, instructions × memory is always 256. No split runs everything. The way out is not to split one byte at all.'],
+  winTitle:'You escaped the single byte.',
+  why:'Instruction bits and address bits compete for the same wires, and their product is fixed: that is why no one-byte split runs every job. Real designs escape the same way you did, at a price you can see in the job cards: programs grow and every operand costs an extra trip to memory. x86 chose variable-length instructions (1 to 15 bytes); ARM and RISC-V chose a fixed 32-bit word with room inside it for both. Both are answers to the budget you just ran out of.',
+  bench:'Changing the format on real hardware means changing the instruction register’s wiring, the control ROM’s address lines, and adding fetch steps for the operand byte. On the Bench Computer, going to 256 bytes of memory also means an 8-bit memory address register and program counter: a second 74HC161 and two more 74HC173 halves.'},
+ {id:'HAND', st:'cpu', view:'hand', title:'Assemble by hand', req:'ROM', ins:[], outs:[],
+  text:'On the bench there is no assembler. You program the Bench Computer by setting eight switches per memory cell. <b>Turn each line of assembly into its bits.</b>',
+  hints:['LDA is 0001. The address 14 is 1110 in binary. So LDA 14 is 0001 1110.','OUT and HLT have no operand: their bottom four bits are 0000.','A plain number like 28 is not an instruction: all eight bits are the number. 28 = 16 + 8 + 4.'],
+  winTitle:'You assembled a program by hand.',
+  why:'This is what an assembler does, and it is all it does: look up each mnemonic, write the operand in binary, put the two side by side. Early programmers did exactly this with switches on a front panel. Notice that 28 in cell 14 and “LDA 12” are the same switches: you decided which it is by where you put it.',
+  chip:HC157, bench:'Programming mode on the Bench Computer: four DIP switches for the address, eight for the data, and a push-button that pulses RAM’s write line. A 74HC157 selector chooses whether the RAM’s address comes from those switches (programming) or from the memory address register (running): the same selector you built in the Gates station, four bits wide.'}
+);
+
+// ================= Find the fault =================
+// A friend's Bench Computer, built from the same design as yours, with one hidden fault.
+// You get what a real builder gets: the LEDs, a clock button, and a probe.
+const FAULT_PROG='LDA 14\nADD 15\nOUT\nHLT\n14: 28\n15: 14';
+const SUSPECTS=[
+  ['chip:PC','Program counter chip'],['rom:F1','Control ROM row: fetch T1'],['rom:LDA3','Control ROM row: LDA T3'],
+  ['chip:A','Register A chip'],['wire:AI','Wire: ROM → register A load pin (AI)'],['wire:BI','Wire: ROM → register B load pin (BI)'],
+  ['chip:ALU','Adder chips'],['ramA0','Wire: memory address register → RAM pin A0'],['bus3','Bus wire, bit 3'],
+  ['irswap','Wires: instruction register → ROM address pins'],['chip:OUT','Output register'],['button','Clock step button']];
+const FAULTS=[
+  {answer:'rom:F1', report:'“It never gets anywhere. The display stays blank and the program counter LEDs are stuck on 0.”',
+   lesson:'The program counter could have been a dead chip, and replacing it is the tempting move. But the probe showed CE never goes high at the ROM during fetch T1. The counter was fine; it was never told to count. Check the command before blaming the part that obeys it.'},
+  {answer:'rom:LDA3', report:'“It runs and halts, but the display says 14, not 42.”',
+   lesson:'14 is exactly what you get if A never loads the first number: 0 + 14. Probing AI at the ROM during LDA T3 shows it low. Nothing is broken electrically; the table is wrong. A wrong answer that is a clean, explainable number usually points to logic, not wiring.'},
+  {answer:'wire:BI', report:'“Sometimes it shows 42. Sometimes something else. Same program, same switches.”',
+   lesson:'At the ROM, BI is a clean 0 or 1. At register B’s pin it flickers: the wire between them is not making contact, so the pin is floating and picks up whatever noise is nearby. Intermittent faults are almost always connections. Measure both ends of a wire, not just one.'},
+  {answer:'ramA0', report:'“It halts almost immediately and shows nothing.”',
+   lesson:'The memory address register said 0000 while the RAM’s address pins said 0001. Everything between those two points is one wire. A pin bent against its neighbour, or a jumper in the wrong row, gives exactly this: the RAM reads the wrong cell, including when fetching instructions, so the whole program turns to nonsense.'},
+  {answer:'bus3', report:'“It shows 0. Every time.”',
+   lesson:'RAM’s data pins showed 00011110 and the bus showed 00010110: one bit vanishes on the way. A bus wire shorted to ground drops that bit from every value that crosses it, instructions included, which is why LDA 14 turned into LDA 6. On the bench, a short like this also makes the chip driving that bit run hot.'},
+  {answer:'irswap', report:'“It halts but the display never lights. My friend swears the ROM is the same as yours.”',
+   lesson:'The instruction register held 0001 (LDA) but the ROM’s address pins received 0010 (ADD): two wires crossed. The ROM faithfully ran the wrong instruction. When a part seems to do the wrong thing, check what it is actually being asked.'},
+  {answer:'button', report:'“It works when I run it with the fast clock. When I single-step it with the button, it goes wrong in random places.”',
+   lesson:'The probe on the clock line showed two pulses from a single press, now and then. Mechanical contacts bounce: they close, open and close again within a millisecond. The cure is a circuit you built at the Memory station: a latch, which ignores every bounce after the first. A 555 in one-shot mode does the same job.'}
+];
+const FT={level:0,m:null,hist:[],chans:['bus','ramdata'],tries:0,solvedMsg:''};
+function faultRom(lv){
+  const r=JSON.parse(JSON.stringify(REF));
+  if(lv.answer==='rom:F1') r.fetch[1]=['RO','II'];
+  if(lv.answer==='rom:LDA3') r.ops.LDA[1]=['RO'];
+  return r;
+}
+function faultReset(){
+  const lv=FAULTS[FT.level];
+  FT.m=newMachine(assemble(FAULT_PROG).ram); FT.m.lastPins=null; FT.rom=faultRom(lv); FT.hist=[];
+}
+function fmicro(m,pulses){
+  const lv=FAULTS[FT.level], A=lv.answer;
+  if(m.halted) return;
+  const seen=A==='irswap'?((m.ir&0xCF)|((m.ir>>1)&0x10)|((m.ir<<1)&0x20)):m.ir;
+  const op=seen>>4, L=linesFor(FT.rom,op,m.step,m.c,m.z);
+  const dest=new Set(L); let floatBI=false;
+  if(A==='wire:BI'){ floatBI=true; dest.delete('BI'); if(Math.random()<0.3) dest.add('BI'); }
+  const has=x=>dest.has(x);
+  const addr=A==='ramA0'?(m.mar|1):m.mar, r=alu(m,has('SU'));
+  const val={CO:m.pc,RO:m.ram[addr],IO:m.ir&15,AO:m.a,EO:r.v};
+  const drv=[...dest].filter(x=>DRIVERS.has(x));
+  let bus=drv.length?drv.map(d=>val[d]).reduce((x,y)=>x&y,255):(Math.random()*256|0);
+  if(A==='bus3') bus&=~8;
+  const pins={label:(m.step<2?'fetch':OPNAME[op]||'?')+' T'+m.step, clk:pulses, bus:drv.length||A==='bus3'?bus:null,
+    ramdata:m.ram[addr], ramaddr:addr, mar:m.mar, irq:m.ir>>4, romaddr:op, a:m.a, pc:m.pc};
+  LINES.forEach(l=>{ pins['rom:'+l]=L.includes(l)?1:0; pins['pin:'+l]=(l==='BI'&&floatBI)?'F':(dest.has(l)?1:0); });
+  const oldMar=m.mar;
+  if(has('MI')) m.mar=bus&15;
+  if(has('RI')) m.ram[A==='ramA0'?(oldMar|1):oldMar]=bus;
+  if(has('II')) m.ir=bus;
+  if(has('AI')) m.a=bus;
+  if(has('BI')) m.b=bus;
+  if(has('OI')){ m.out=bus; m.outs.push(bus); }
+  if(has('FI')){ m.c=r.c; m.z=r.z; }
+  if(has('CE')) m.pc=(m.pc+1)&15;
+  if(has('J')) m.pc=bus&15;
+  if(has('HLT')) m.halted=true;
+  m.step=(m.step+1)%5;
+  FT.hist.push(pins); if(FT.hist.length>30) FT.hist.shift(); m.lastPins=pins;
+}
+function fpress(){
+  const pulses=FAULTS[FT.level].answer==='button'&&Math.random()<0.35?2:1;
+  for(let i=0;i<pulses;i++) fmicro(FT.m,pulses);
+}
+const PROBES=[['bus','Bus (all 8 wires)'],['ramdata','RAM data pins'],['ramaddr','RAM address pins'],['mar','Memory address register outputs'],
+  ['irq','Instruction register, top 4 outputs'],['romaddr','ROM opcode address pins'],['a','Register A outputs'],['pc','Program counter outputs'],['clk','Clock line: pulses per press'],
+  ...LINES.flatMap(l=>[['rom:'+l,`${l} at the ROM output pin`],['pin:'+l,`${l} at the chip it controls`]])];
+const pbits=(id,v)=>v==null?'—':v==='F'?'floating':['ramaddr','mar','irq','romaddr','pc'].includes(id)?v.toString(2).padStart(4,'0'):['bus','ramdata','a'].includes(id)?v.toString(2).padStart(8,'0'):id==='clk'?v+(v>1?' pulses':' pulse'):(v?'HIGH':'LOW');
+function renderFault(){
+  const m=FT.m, lv=FAULTS[FT.level];
+  $('#flevels').innerHTML=FAULTS.map((f,i)=>`<button class="btn ${i===FT.level?'dark':''}" data-fl="${i}" ${i>(P.faultLevel||0)?'disabled':''}>Fault ${i+1}${i<(P.faultLevel||0)||P.solved.FAULT?' ✓':''}</button>`).join('');
+  $('#freport').innerHTML=`<b>The report:</b> ${lv.report} <span style="color:var(--muted)">The program is 28 + 14 and should display 42.</span>`;
+  // front panel LEDs
+  const row=(name,v,n)=>`<div class="frow"><span>${name}</span>${[...Array(n)].map((_,i)=>`<i class="${v!=null&&(v>>(n-1-i))&1?'on':''}"></i>`).join('')}<b>${v==null?'—':v}</b></div>`;
+  const p=m.lastPins||{};
+  $('#fpanel').innerHTML=row('Program counter',m.pc,4)+row('Mem. address',m.mar,4)+row('RAM out',m.ram[FAULTS[FT.level].answer==='ramA0'?m.mar|1:m.mar],8)+row('Instruction',m.ir,8)+
+    row('Bus',p.bus??null,8)+row('Register A',m.a,8)+row('Register B',m.b,8)+row('Display',m.out,8)+
+    `<div class="frow"><span>Step</span>${[0,1,2,3,4].map(s=>`<i class="${(m.step+4)%5===s&&m.lastPins?'on':''}"></i>`).join('')}<b>${m.halted?'halted':''}</b></div>`+
+    `<div class="frow"><span>Control LEDs</span><em>${LINES.map(l=>`<u class="${p['rom:'+l]?'on':''}">${l}</u>`).join('')}</em></div>`;
+  // logic analyzer
+  const H=FT.hist.slice(-12), cw=62;
+  let s=`<text x="4" y="14" font-size="11" fill="var(--muted)">Logic analyser: last ${H.length} clock steps, oldest on the left</text>`;
+  H.forEach((h,i)=>{ const x=150+i*cw; s+=`<text x="${x+cw/2}" y="30" text-anchor="middle" font-size="9" fill="var(--muted)" transform="rotate(-35 ${x+cw/2} 30)">${h.label}</text>`; });
+  FT.chans.forEach((id,ci)=>{
+    const y=60+ci*44, name=(PROBES.find(p=>p[0]===id)||[id,id])[1];
+    s+=`<text x="4" y="${y+18}" font-size="11" fill="var(--ink)">${name.length>24?name.slice(0,23)+'…':name}</text>`;
+    s+=`<text x="4" y="${y+32}" font-size="10" fill="#b44" style="cursor:pointer" data-rm="${ci}">remove</text>`;
+    H.forEach((h,i)=>{
+      const v=h[id], x=150+i*cw;
+      if(v==='F') s+=`<path d="M${x},${y+8} l${cw/4},16 l${cw/4},-16 l${cw/4},16 l${cw/4},-16" stroke="var(--bad)" stroke-width="2" fill="none"/>`;
+      else if((v===0||v===1)&&/^(rom|pin):/.test(id)) s+=`<line x1="${x}" y1="${v?y+6:y+26}" x2="${x+cw}" y2="${v?y+6:y+26}" stroke="${v?'var(--live)':'var(--wire)'}" stroke-width="3"/>`;
+      else s+=`<rect x="${x+1}" y="${y+4}" width="${cw-2}" height="24" rx="3" fill="${v==null?'#eee':'#fff'}" stroke="var(--line)"/><text x="${x+cw/2}" y="${y+20}" text-anchor="middle" font-size="10" font-family="JetBrains Mono,monospace" fill="var(--ink)">${v==null?'—':id==='clk'?v:pbits(id,v)}</text>`;
+    });
+  });
+  $('#fscope').setAttribute('viewBox',`0 0 ${150+12*cw} ${70+FT.chans.length*44}`);
+  $('#fscope').innerHTML=s;
+  $('#fprobe').innerHTML=PROBES.map(([id,n])=>`<option value="${id}">${n}</option>`).join('');
+  $('#faccuse').innerHTML='<option value="">I think the fault is…</option>'+SUSPECTS.map(([id,n])=>`<option value="${id}">${n}</option>`).join('');
+  $('#fverdict').innerHTML=FT.solvedMsg;
+  $('#status').textContent=`Press the clock button to step, or run the whole program. Add probe channels to the analyser to watch any wire over time. Parts replaced on this fault: ${FT.tries}.`;
+}
+$('#fstep').onclick=()=>{ fpress(); renderFault(); };
+$('#frun').onclick=()=>{ let n=0; while(!FT.m.halted&&n<60){ fmicro(FT.m,1); n++; } renderFault(); };
+$('#freset').onclick=()=>{ faultReset(); renderFault(); };
+$('#fadd').onclick=()=>{ const v=$('#fprobe').value; if(!FT.chans.includes(v)){ FT.chans.push(v); if(FT.chans.length>6) FT.chans.shift(); } renderFault(); };
+$('#fscope').addEventListener('click',e=>{ const r=e.target.closest('[data-rm]'); if(r){ FT.chans.splice(+r.dataset.rm,1); renderFault(); } });
+$('#flevels').addEventListener('click',e=>{ const b=e.target.closest('[data-fl]'); if(b&&!b.disabled){ FT.level=+b.dataset.fl; FT.tries=0; FT.solvedMsg=''; faultReset(); renderFault(); } });
+$('#fgo').onclick=()=>{
+  const g=$('#faccuse').value; if(!g) return; const lv=FAULTS[FT.level];
+  if(g===lv.answer){
+    FT.solvedMsg=`<div class="win"><b>Found it${FT.tries?` after ${FT.tries} wrong replacement${FT.tries>1?'s':''}`:' first time'}.</b> ${lv.lesson}</div>`;
+    if(FT.level===(P.faultLevel||0)){ P.faultLevel=Math.min(FAULTS.length-1,(P.faultLevel||0)+1); if(FT.level===FAULTS.length-1) P.solved.FAULT={}; save(); renderSteps(); renderWin(); }
+  } else { FT.tries++; FT.solvedMsg=`<div class="hint">You replaced: ${SUSPECTS.find(s=>s[0]===g)[1]}. You run the program again. Same symptom. On the bench that cost you a part and half an hour. What would you measure before replacing the next thing?</div>`; }
+  renderFault();
+};
+
+CH.push({id:'FAULT', st:'cpu', view:'fault', title:'Find the fault', req:'ROM', ins:[], outs:[],
+  text:'A friend built the same computer. It does not work. You have their bug report, the LEDs on every module, a clock button, and a logic probe. <b>Find the fault without replacing parts at random.</b>',
+  hints:['Start from the symptom and ask which block first shows a wrong value. Step one clock at a time and compare the LEDs with what your own machine did.',
+    'When a value is right in one place and wrong in the next, the fault is between those two places. Probe the signal at both ends: at the ROM output, and at the chip it controls.',
+    'A clean HIGH or LOW that is simply wrong points to logic: the ROM table. A signal that flickers, or that differs between the two ends of a wire, points to wiring. A problem that comes and goes points to a connection or a switch.'],
+  winTitle:'You found all seven faults.',
+  why:'Debugging hardware is a search, and each measurement halves the space: the value is right here, wrong there, so the fault lies between. The seven faults cover the families you will actually meet on a breadboard: a wrong table entry, a missing command, a broken connection, a bent pin, a short, crossed wires and a bouncing switch. The habit that finds all of them is the same: measure, don’t guess. The single-step clock and a probe are worth more than a box of spare chips.',
+  bench:'Build a logic probe for a few pence: two LEDs (one for high, one for low) driven by a 74HC04 with a high-value resistor holding the input in the middle, so that a floating wire lights neither. Put LEDs on every register and the bus as you build, the way the front panel here does; they turn a dead machine into a readable one.'});
+
+// ================= Cold start =================
+// Mark 2 of the Bench Computer: 8-bit addresses (256 bytes), two-byte instructions,
+// the escape from the bit budget. Addresses 0–31 are a ROM chip; 32–255 are RAM.
+const OPS2={NOP:0,LDA:1,ADD:2,SUB:3,STA:4,LDI:5,JMP:6,JC:7,JZ:8,IN:9,STX:10,OUT:14,HLT:15};
+const OPNAME2=Object.fromEntries(Object.entries(OPS2).map(([k,v])=>[v,k]));
+const ARG2=new Set(['LDA','ADD','SUB','STA','LDI','JMP','JC','JZ','STX']);
+const ROM_END=32;
+function assemble2(text,org0=0){
+  const lines=text.split('\n').map(l=>l.replace(/#.*/,'').trim()), labels={}, errors=[];
+  const parse=(pass)=>{
+    const mem={}; let pc=org0;
+    lines.forEach((l,i)=>{
+      if(!l) return;
+      let m=l.match(/^([A-Za-z_]\w*)\s*=\s*(\d+)$/); if(m){ labels[m[1]]=+m[2]; return; }
+      m=l.match(/^([A-Za-z_]\w*):\s*(.*)$/); if(m){ labels[m[1]]=pc; l=m[2].trim(); if(!l) return; }
+      const t=l.split(/\s+/), op=t[0].toUpperCase();
+      if(op==='.ORG'){ pc=+t[1]; return; }
+      if(op==='.BYTE'){ mem[pc++]=(+t[1])&255; return; }
+      if(!(op in OPS2)){ if(pass) errors.push(`Line ${i+1}: “${t[0]}” is not an instruction.`); return; }
+      mem[pc++]=OPS2[op];
+      if(ARG2.has(op)){
+        const a=t[1]; let v=a==null?NaN:/^\d+$/.test(a)?+a:labels[a];
+        if(pass&&(v==null||isNaN(v))) errors.push(`Line ${i+1}: ${op} needs an address or number${a==='???'?' — this is one of the blanks to fill':a?`; “${a}” is not defined`:''}.`);
+        mem[pc++]=(v||0)&255;
+      }
+    });
+    return {mem,end:pc};
+  };
+  parse(false); const r=parse(true);
+  return {mem:r.mem,end:r.end,errors,labels};
+}
+const MONITOR=`# Boot monitor. It lives in ROM at address 0, so it runs the moment power comes on.
+# It reads a length byte from the input port, then that many bytes,
+# writes them into RAM starting at address 32, then runs them.
+        LDI 32
+        STA ptr        # ptr = where the next byte will go
+        IN             # the first byte on the tape: how many bytes follow
+        STA count
+next:   LDA count
+        JZ  run        # nothing left to read? then go
+        IN             # read one byte of the program
+        STX ???        # store A at the address held in ptr
+        LDA ptr
+        ADD one
+        STA ptr        # move ptr on by one
+        LDA count
+        SUB one
+        STA count
+        JMP ???        # and round again
+run:    JMP ???        # start the program you just loaded
+one:    .byte 1
+ptr = 254              # these two live in RAM
+count = 255`;
+const TAPE_PROG=`.org 32
+start:  LDI 5
+        STA n
+loop:   LDA n
+        OUT
+        JZ  end
+        SUB one
+        STA n
+        JMP loop
+end:    HLT
+one:    .byte 1
+n:      .byte 0`;
+const K={mem:Array(256).fill(0),rom:Array(32).fill(0),romFitted:false,pc:0,a:0,z:0,c:0,out:[],tape:[],head:0,halted:false,
+         running:false,wrote:-1,note:'',garbage:false,burned:false,steps:0};
+function buildTape(){ if(K.custom) return [K.custom.length,...K.custom]; const {mem,end}=assemble2(TAPE_PROG); const bytes=[]; for(let i=32;i<end;i++) bytes.push(mem[i]||0); return [bytes.length,...bytes]; }
+function powerOn(){
+  for(let i=0;i<256;i++) K.mem[i]=Math.random()*256|0;               // RAM wakes up holding nonsense
+  if(K.romFitted) for(let i=0;i<ROM_END;i++) K.mem[i]=K.rom[i];
+  Object.assign(K,{pc:0,a:0,z:0,c:0,out:[],tape:buildTape(),head:0,halted:false,running:false,wrote:-1,note:'Power on. The program counter is cleared to 0 by its reset pin. Whatever is at address 0 will run.',garbage:!K.romFitted,steps:0,warn:'',loaded:new Set()});
+}
+function kstep(){
+  if(K.halted) return;
+  const op=K.mem[K.pc], name=OPNAME2[op];
+  if(!name){ K.note=`Address ${K.pc} holds ${op}, which is not an instruction. The machine does something meaningless and moves on.`; K.pc=(K.pc+1)&255; K.garbage=true; K.steps++; return; }
+  const arg=ARG2.has(name)?K.mem[(K.pc+1)&255]:null, at=K.pc;
+  K.pc=(K.pc+(arg==null?1:2))&255; K.wrote=-1; K.steps++;
+  const write=(addr,v)=>{ if(addr<ROM_END&&K.romFitted){ K.warn=`${name} at address ${at} tried to write to ${addr}, which is inside the ROM. Nothing happened: a ROM cannot be written.`; return; } K.mem[addr]=v; K.wrote=addr; K.loaded.add(addr); };
+  const setZ=()=>{ K.z=K.a===0?1:0; };
+  K.note=`${at}: ${name}${arg!=null?' '+arg:''}`;
+  switch(name){
+    case 'LDA': K.a=K.mem[arg]; setZ(); break;
+    case 'ADD': { const s=K.a+K.mem[arg]; K.c=s>255?1:0; K.a=s&255; setZ(); break; }
+    case 'SUB': { const s=K.a+((~K.mem[arg])&255)+1; K.c=s>255?1:0; K.a=s&255; setZ(); break; }
+    case 'STA': write(arg,K.a); break;
+    case 'STX': write(K.mem[arg],K.a); break;
+    case 'LDI': K.a=arg; setZ(); break;
+    case 'JMP': K.pc=arg; break;
+    case 'JC': if(K.c) K.pc=arg; break;
+    case 'JZ': if(K.z) K.pc=arg; break;
+    case 'IN': K.a=K.head<K.tape.length?K.tape[K.head++]:0; setZ(); break;
+    case 'OUT': K.out.push(K.a); break;
+    case 'HLT': K.halted=true; K.running=false; break;
+  }
+  if(K.halted&&K.romFitted&&K.out.join()==='5,4,3,2,1,0'&&!P.solved.BOOT){ P.solved.BOOT={}; save(); renderSteps(); renderWin(); }
+}
+function renderBoot(){
+  let h=GLOW;
+  // tape
+  h+=`<text x="10" y="18" font-size="12" font-weight="600" fill="var(--ink)">Input tape (the program to load, with its length first)</text>`;
+  K.tape.slice(0,34).forEach((b,i)=>{ const x=10+i*26, used=i<K.head;
+    h+=`<rect x="${x}" y="26" width="24" height="24" rx="2" fill="${used?'#E2E6E0':'#fff'}" stroke="${i===K.head?'var(--live)':'var(--line)'}" stroke-width="${i===K.head?3:1}"/><text x="${x+12}" y="42" text-anchor="middle" font-size="9" font-family="JetBrains Mono,monospace" fill="${used?'#aaa':'var(--ink)'}">${b}</text>`; });
+  // memory grid
+  h+=`<text x="10" y="76" font-size="12" font-weight="600" fill="var(--ink)">Memory, all 256 bytes. Grey: ROM chip (0–31). Cream: RAM, still holding power-on noise. Green: written since power-on.</text>`;
+  for(let i=0;i<256;i++){
+    const r=i>>4, c=i&15, x=40+c*52, y=86+r*25, rom=i<ROM_END&&K.romFitted, isPc=i===K.pc&&!K.halted;
+    h+=`<rect x="${x}" y="${y}" width="50" height="23" rx="2" fill="${i===K.wrote?'var(--live)':rom?'#D5DAD6':K.loaded.has(i)?'#DCEEDF':'#FFF8E4'}" stroke="${isPc?'var(--ink)':'transparent'}" stroke-width="${isPc?3:0}"/>`;
+    h+=`<text x="${x+25}" y="${y+16}" text-anchor="middle" font-size="11" font-family="JetBrains Mono,monospace" fill="var(--ink)">${K.mem[i]}</text>`;
+    if(c===0) h+=`<text x="34" y="${y+16}" text-anchor="end" font-size="10" fill="var(--muted)">${i}</text>`;
+  }
+  $('#boot').innerHTML=h;
+  $('#kread').innerHTML=`<div><small>Program counter</small><b>${K.pc}</b><small>${K.pc<ROM_END&&K.romFitted?'running from ROM':'running from RAM'}</small></div>`+
+    `<div><small>Register A</small><b>${K.a}</b><small>zero flag ${K.z}</small></div>`+
+    `<div><small>Display</small><b style="font-size:17px">${K.out.slice(-8).join(', ')||'—'}</b><small>${K.halted?'halted':K.steps+' instructions run'}</small></div>`;
+  $('#knote').innerHTML=K.note+(K.warn?`<div style="color:var(--bad)">${K.warn}</div>`:'');
+  $('#kfit').textContent=K.romFitted?'ROM chip: fitted':'ROM chip: not fitted';
+  $('#status').textContent=K.romFitted?(K.burned?'ROM burned. Power on and watch: the monitor reads the tape into RAM, then jumps to it.':'Fill the three blanks, then burn the monitor into the ROM.'):'No ROM fitted: memory is all RAM, and RAM wakes up random. Power on and run it to see what a computer does with no program.';
+}
+$('#kpower').onclick=()=>{ powerOn(); renderBoot(); };
+$('#kstep').onclick=()=>{ K.running=false; kstep(); renderBoot(); };
+$('#krun').onclick=()=>{ K.running=!K.running; $('#krun').textContent=K.running?'Pause':'Run'; };
+$('#kfit').onclick=()=>{ K.romFitted=!K.romFitted; powerOn(); renderBoot(); };
+$('#kburn').onclick=()=>{
+  const {mem,end,errors}=assemble2($('#ksrc').value);
+  if(end>ROM_END) errors.push(`The monitor is ${end} bytes; the ROM holds only ${ROM_END}.`);
+  $('#kerr').innerHTML=errors.map(e=>`<div>${e}</div>`).join('');
+  if(errors.length) return;
+  for(let i=0;i<ROM_END;i++) K.rom[i]=mem[i]||0;
+  P.bootRom=K.rom.slice(); P.bootSrc=$('#ksrc').value; save();
+  K.romFitted=true; K.burned=true; powerOn(); K.note=`Burned ${end} of ${ROM_END} ROM bytes. Power is on.`; renderBoot();
+};
+$('#ktape').textContent=TAPE_PROG;
+
+CH.push({id:'BOOT', st:'cpu', view:'boot', title:'Cold start', req:'FAULT', ins:[], outs:[],
+  text:'This is the Bench Computer, mark 2: 256 bytes of memory and two-byte instructions, the escape you found in the bit budget. It also has the problem every computer has at power-on: <b>memory holds nothing but noise</b>. First watch what that means. Then fit a ROM and write the program that brings the machine up.',
+  hints:['Run it with no ROM a few times. Does it ever do the same thing twice? What decides where it goes?',
+    'STX ptr stores A at the address written in ptr. That is how a loop can write to a different address each time round without changing its own code, which it could not do anyway: the monitor is in ROM.',
+    'After a byte is stored, the loop must go back and check the count again. And once count reaches zero, the program you loaded starts at address 32.',
+    'Try putting ptr inside the ROM (for example ptr = 20) and watch what the note says.'],
+  winTitle:'Your machine can start itself.',
+  why:'A computer cannot load its first program, because loading is itself a program. The answer is a small one that never needs loading: fixed in ROM, at the address the program counter resets to. It does one job, fetching something bigger, and hands over. Your 31-byte monitor is that idea whole. A PC does the same in a chain: firmware in flash reads a bootloader from disk, the bootloader reads the operating system’s kernel, the kernel starts everything else. Each stage exists only to load the next, and the first one is always in a chip that does not forget.',
+  chip:AT28C16, bench:'The boot ROM is another AT28C16. Memory mapping is done by address decoding, with the decoder you built at the Memory station: when the top three address bits are 000 (addresses 0–31) the decoder enables the ROM; otherwise it enables the RAM. The “tape” on a real bench is usually a microcontroller (an Arduino) wired to an input port, sending one byte each time the computer runs IN.'});
+
+// ================= The tiny compiler =================
+// A language small enough to see through: assignments, print, while loops,
+// + − * and brackets. It compiles to mark 2 assembly, which your assembler turns into bytes.
+const TC={src:'',opt:false,sel:null,ast:null,asm:[],bytes:[],errors:[],run:null,task:0};
+const TASKS=[
+  {name:'The book’s example',src:'a = 2\nb = 3\nc = 4\nx = (a + b) * c\nprint x',want:[20],say:'Run it. Click the * in the tree and find the loop it became: your machine cannot multiply, so the compiler writes multiplication out as repeated addition. Then switch optimisation on and run it again.'},
+  {name:'Count down, in words',src:'n = 5\n# write a while loop that prints 5, 4, 3, 2, 1\n# then print n once more (it will be 0)\n',want:[5,4,3,2,1,0],say:'Rewrite the countdown you loaded at Cold Start, but in this language. “while n { … }” repeats while n is not zero.'},
+  {name:'Five factorial',src:'# compute 5 × 4 × 3 × 2 × 1 and print it\n',want:[120],say:'Print 120, computed with a loop. Then switch optimisation on. It barely helps here, while on the first task it deletes almost everything. Why the difference?'}];
+
+function tokenize(src){
+  const toks=[]; let i=0, line=1;
+  while(i<src.length){
+    const ch=src[i];
+    if(ch==='#'){ while(i<src.length&&src[i]!=='\n') i++; continue; }
+    if(ch==='\n'){ toks.push({t:'nl',line}); line++; i++; continue; }
+    if(/\s/.test(ch)){ i++; continue; }
+    if(/\d/.test(ch)){ let j=i; while(/\d/.test(src[j]||'')) j++; toks.push({t:'num',v:+src.slice(i,j),line}); i=j; continue; }
+    if(/[A-Za-z_]/.test(ch)){ let j=i; while(/\w/.test(src[j]||'')) j++; const w=src.slice(i,j); toks.push({t:['print','while'].includes(w)?w:'id',v:w,line}); i=j; continue; }
+    if('+-*()={}'.includes(ch)){ toks.push({t:ch,line}); i++; continue; }
+    throw {line,msg:`“${ch}” is not something this language understands.`};
+  }
+  toks.push({t:'nl',line}); toks.push({t:'eof',line});
+  return toks;
+}
+let NID=0;
+function parse(src){
+  NID=0; const T=tokenize(src); let i=0;
+  const peek=()=>T[i], eat=(t)=>{ const k=T[i]; if(k.t!==t) throw {line:k.line,msg:`expected ${t==='nl'?'the end of the line':`“${t}”`} here.`}; i++; return k; };
+  const skipNl=()=>{ while(peek().t==='nl') i++; };
+  const N=(o)=>Object.assign({id:NID++,kids:[]},o);
+  function factor(){ const k=peek();
+    if(k.t==='num'){ i++; if(k.v>255) throw {line:k.line,msg:`${k.v} does not fit in one byte (0–255).`}; return N({kind:'num',val:k.v,line:k.line}); }
+    if(k.t==='id'){ i++; return N({kind:'var',name:k.v,line:k.line}); }
+    if(k.t==='('){ i++; const e=expr(); eat(')'); return e; }
+    throw {line:k.line,msg:'expected a number, a name or “(”.'}; }
+  function term(){ let l=factor(); while(peek().t==='*'){ const k=T[i++]; l=N({kind:'bin',op:'*',kids:[l,factor()],line:k.line}); } return l; }
+  function expr(){ let l=term(); while(peek().t==='+'||peek().t==='-'){ const k=T[i++]; l=N({kind:'bin',op:k.t,kids:[l,term()],line:k.line}); } return l; }
+  function stmt(){ const k=peek();
+    if(k.t==='print'){ i++; const e=expr(); eat('nl'); return N({kind:'print',kids:[e],line:k.line}); }
+    if(k.t==='while'){ i++; const c=expr(); eat('{'); const body=[]; skipNl(); while(peek().t!=='}'){ if(peek().t==='eof') throw {line:k.line,msg:'this while has no closing “}”.'}; body.push(stmt()); skipNl(); } eat('}'); return N({kind:'while',kids:[c,...body],line:k.line}); }
+    if(k.t==='id'){ i++; eat('='); const e=expr(); eat('nl'); return N({kind:'assign',name:k.v,kids:[e],line:k.line}); }
+    throw {line:k.line,msg:'a line must start with a name and “=”, or with print, or with while.'}; }
+  const prog=N({kind:'prog'}); skipNl(); while(peek().t!=='eof'){ prog.kids.push(stmt()); skipNl(); }
+  return prog;
+}
+function fold(n){ // constant folding: work out at compile time what can never change
+  n.kids.forEach(fold);
+  if(n.kind==='bin'&&n.kids.every(k=>k.kind==='num')){
+    const [a,b]=n.kids.map(k=>k.val), v=n.op==='+'?a+b:n.op==='-'?a-b:a*b;
+    Object.assign(n,{kind:'num',val:v&255,folded:true}); n.kids=[];
+  }
+}
+// Constant propagation: a variable given a fixed value exactly once, at the top level, is
+// just a name for that number. Replace its later uses with the number, fold again, and drop
+// the store nobody reads any more (dead code).
+function optimise(prog){
+  const count={}; (function c(n){ if(n.kind==='assign') count[n.name]=(count[n.name]||0)+1; n.kids.forEach(c); })(prog);
+  const known={};
+  const sub=n=>{ n.kids.forEach(sub); if(n.kind==='var'&&n.name in known) Object.assign(n,{kind:'num',val:known[n.name],folded:true}); };
+  for(const st of prog.kids){
+    sub(st); fold(st);
+    if(st.kind==='assign'&&count[st.name]===1&&st.kids[0].kind==='num'){ known[st.name]=st.kids[0].val; st.dead=true; }
+  }
+  prog.kids=prog.kids.filter(s=>!s.dead);
+}
+function codegen(prog){
+  const out=[], vars=new Set(), consts=new Set(); let lab=0, tdepth=0, tmax=0;
+  const E=(text,id)=>out.push({text,id}), L=()=>'L'+(lab++);
+  const temp=()=>{ const t='t'+(tdepth++); tmax=Math.max(tmax,tdepth); return t; }, free=()=>tdepth--;
+  const operand=(n)=>{ if(n.kind==='var'){ vars.add(n.name); return 'v_'+n.name; } consts.add(n.val); return 'k'+n.val; };
+  function ex(n){
+    if(n.kind==='num') return E(`LDI ${n.val}`,n.id);
+    if(n.kind==='var'){ vars.add(n.name); return E(`LDA v_${n.name}`,n.id); }
+    const [a,b]=n.kids;
+    if(n.op==='*'){
+      const cnt=temp(), mul=temp(), acc=temp(), top=L(), done=L(); consts.add(1);
+      ex(b); E(`STA ${cnt}`,n.id); ex(a); E(`STA ${mul}`,n.id); E('LDI 0',n.id); E(`STA ${acc}`,n.id);
+      E(`${top}: LDA ${cnt}`,n.id); E(`JZ ${done}`,n.id); E(`LDA ${acc}`,n.id); E(`ADD ${mul}`,n.id); E(`STA ${acc}`,n.id);
+      E(`LDA ${cnt}`,n.id); E('SUB k1',n.id); E(`STA ${cnt}`,n.id); E(`JMP ${top}`,n.id); E(`${done}: LDA ${acc}`,n.id);
+      free(); free(); free(); return;
+    }
+    const ins=n.op==='+'?'ADD':'SUB';
+    if(b.kind==='var'||b.kind==='num'){ ex(a); E(`${ins} ${operand(b)}`,n.id); return; }
+    const t=temp(); ex(b); E(`STA ${t}`,n.id); ex(a); E(`${ins} ${t}`,n.id); free();
+  }
+  function st(n){
+    if(n.kind==='assign'){ ex(n.kids[0]); vars.add(n.name); E(`STA v_${n.name}`,n.id); }
+    else if(n.kind==='print'){ ex(n.kids[0]); E('OUT',n.id); }
+    else if(n.kind==='while'){ const top=L(), end=L(); E(`${top}:`,n.id); ex(n.kids[0]); E(`JZ ${end}`,n.id); n.kids.slice(1).forEach(st); E(`JMP ${top}`,n.id); E(`${end}:`,n.id); }
+  }
+  prog.kids.forEach(st); E('HLT',prog.id);
+  const data=[...[...vars].map(v=>`v_${v}: .byte 0`),...[...Array(tmax)].map((_,i)=>`t${i}: .byte 0`),...[...consts].map(c=>`k${c}: .byte ${c}`)];
+  return {code:out,data};
+}
+// Peephole: look at neighbouring instructions for waste. Storing A and immediately loading
+// the same cell back changes nothing, because A still holds the value.
+function peephole(code){
+  const r=[];
+  for(const x of code){
+    const p=r[r.length-1], m1=p&&p.text.match(/^STA (\w+)$/), m2=x.text.match(/^LDA (\w+)$/);
+    if(m1&&m2&&m1[1]===m2[1]) continue;
+    r.push(x);
+  }
+  return r;
+}
+function compileNow(){
+  TC.errors=[]; TC.run=null;
+  try{
+    TC.ast=parse(TC.src);
+    if(TC.opt) optimise(TC.ast);
+    let {code,data}=codegen(TC.ast);
+    if(TC.opt) code=peephole(code);
+    TC.asm=[{text:'.org 32',id:null},...code,...data.map(d=>({text:d,id:null}))];
+    const r=assemble2(TC.asm.map(a=>a.text).join('\n'));
+    if(r.errors.length) TC.errors=r.errors;
+    TC.bytes=[]; for(let i=32;i<r.end;i++) TC.bytes.push(r.mem[i]||0);
+    if(r.end>256) TC.errors.push(`The program needs ${r.end-32} bytes; mark 2 has ${256-32} bytes of RAM.`);
+  }catch(e){ TC.ast=null; TC.asm=[]; TC.bytes=[]; TC.errors=[`Line ${e.line}: ${e.msg||e}`]; }
+}
+function run2(bytes){
+  const mem=Array(256).fill(0); bytes.forEach((b,i)=>mem[32+i]=b);
+  let pc=32,a=0,z=0,c=0,steps=0,cycles=0; const out=[];
+  while(steps<30000){
+    const name=OPNAME2[mem[pc]]; if(!name) return {out,steps,cycles,err:`Reached address ${pc}, which is not an instruction.`};
+    const arg=ARG2.has(name)?mem[(pc+1)&255]:null; pc=(pc+(arg==null?1:2))&255; steps++; cycles+=arg==null?5:7;
+    const sz=()=>z=a===0?1:0;
+    if(name==='LDA'){a=mem[arg];sz();} else if(name==='ADD'){const s=a+mem[arg];c=+(s>255);a=s&255;sz();}
+    else if(name==='SUB'){const s=a+((~mem[arg])&255)+1;c=+(s>255);a=s&255;sz();} else if(name==='STA') mem[arg]=a;
+    else if(name==='LDI'){a=arg;sz();} else if(name==='JMP') pc=arg; else if(name==='JZ'){ if(z) pc=arg; } else if(name==='JC'){ if(c) pc=arg; }
+    else if(name==='OUT') out.push(a); else if(name==='HLT') return {out,steps,cycles};
+  }
+  return {out,steps,cycles,err:'Stopped after 30,000 instructions. Is there a loop that never ends?'};
+}
+function treeSvg(ast){
+  if(!ast) return '';
+  const label=n=>n.kind==='num'?String(n.val):n.kind==='var'?n.name:n.kind==='bin'?n.op:n.kind==='assign'?n.name+' =':n.kind==='prog'?'program':n.kind;
+  let x=0; const pos={};
+  (function place(n,d){ if(!n.kids.length){ pos[n.id]={x:x++,d}; return; } n.kids.forEach(k=>place(k,d+1)); const xs=n.kids.map(k=>pos[k.id].x); pos[n.id]={x:(Math.min(...xs)+Math.max(...xs))/2,d}; })(ast,0);
+  const W=Math.max(1,x)*64+20, D=Math.max(...Object.values(pos).map(p=>p.d)), H=(D+1)*58+20;
+  let h=''; const px=p=>20+p.x*64+22, py=p=>20+p.d*58;
+  (function edges(n){ n.kids.forEach(k=>{ h+=`<line x1="${px(pos[n.id])}" y1="${py(pos[n.id])+14}" x2="${px(pos[k.id])}" y2="${py(pos[k.id])-14}" stroke="var(--wire)" stroke-width="1.5"/>`; edges(k); }); })(ast);
+  (function nodes(n){ const p=pos[n.id], sel=TC.sel===n.id, leaf=!n.kids.length;
+    h+=`<g data-nid="${n.id}" style="cursor:pointer"><rect x="${px(p)-28}" y="${py(p)-14}" width="56" height="28" rx="${leaf?14:4}" fill="${sel?'var(--live)':n.kind==='bin'?'var(--chip)':'#fff'}" stroke="var(--ink)" stroke-width="1.5"/>`+
+      `<text x="${px(p)}" y="${py(p)+5}" text-anchor="middle" font-size="13" font-weight="600" font-family="JetBrains Mono,monospace" fill="${n.kind==='bin'&&!sel?'#fff':'var(--ink)'}">${label(n)}${n.folded?'*':''}</text></g>`;
+    n.kids.forEach(nodes); })(ast);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:${Math.round(W*1.25)}px;max-width:100%;height:auto">${h}</svg>`;
+}
+function renderCompile(){
+  const T=TASKS[TC.task];
+  $('#tctasks').innerHTML=TASKS.map((t,i)=>`<button class="btn ${i===TC.task?'dark':''}" data-task="${i}">${i+1}. ${t.name}${(P.tcDone||{})[i]?' ✓':''}</button>`).join('');
+  $('#tcsay').textContent=T.say;
+  $('#tcopt').textContent='Optimise: '+(TC.opt?'on':'off');
+  $('#tctree').innerHTML=TC.ast?treeSvg(TC.ast):'<p style="color:var(--muted)">No tree: the program did not parse.</p>';
+  $('#tcasm').innerHTML=TC.asm.map((a,i)=>`<div class="asl ${a.id!=null&&a.id===TC.sel?'on':''}" data-aid="${a.id}">${a.text}</div>`).join('');
+  $('#tcerr').innerHTML=TC.errors.map(e=>`<div>${e}</div>`).join('');
+  const hl=$('#tcasm .asl.on'); if(hl) hl.scrollIntoView({block:'nearest'});
+  const instr=TC.asm.filter(a=>a.text&&!/^\s*[\w]+:\s*$/.test(a.text)&&!/\.byte|\.org/.test(a.text)).length;
+  const r=TC.run;
+  $('#tcread').innerHTML=`<div><small>Program size</small><b>${TC.bytes.length}</b><small>bytes, ${instr} instructions written</small></div>`+
+    `<div><small>Instructions run</small><b>${r?r.steps:'—'}</b><small>${r?r.cycles+' clock steps':'press Run'}</small></div>`+
+    `<div><small>Display</small><b style="font-size:17px">${r?(r.out.join(', ')||'nothing'):'—'}</b><small>${r?(r.err||'halted'):''}</small></div>`;
+  $('#tcbytes').textContent=TC.bytes.join(' ');
+  $('#status').textContent='Click any node in the tree to see which instructions it became. Click an instruction to see which part of your program wrote it.';
+}
+$('#tcsrc').addEventListener('input',e=>{ TC.src=e.target.value; compileNow(); renderCompile(); });
+$('#tcopt').onclick=()=>{ TC.opt=!TC.opt; compileNow(); renderCompile(); };
+$('#tctree').addEventListener('click',e=>{ const g=e.target.closest('[data-nid]'); if(g){ TC.sel=+g.dataset.nid; renderCompile(); } });
+$('#tcasm').addEventListener('click',e=>{ const d=e.target.closest('[data-aid]'); if(d&&d.dataset.aid!=='null'){ TC.sel=+d.dataset.aid; renderCompile(); } });
+$('#tctasks').addEventListener('click',e=>{ const b=e.target.closest('[data-task]'); if(!b) return; TC.task=+b.dataset.task; TC.src=TASKS[TC.task].src; $('#tcsrc').value=TC.src; TC.sel=null; compileNow(); renderCompile(); });
+$('#tcrun').onclick=()=>{
+  if(TC.errors.length) return;
+  TC.run=run2(TC.bytes);
+  const want=TASKS[TC.task].want, got=TC.run.out;
+  if(!TC.run.err&&got.join()===want.join()){ P.tcDone ||= {}; P.tcDone[TC.task]=1; if(TC.task===2&&!P.solved.COMPILE){ P.solved.COMPILE={}; renderSteps(); renderWin(); } save(); }
+  renderCompile();
+};
+$('#tcboot').onclick=()=>{ if(TC.errors.length||!TC.bytes.length) return; K.custom=TC.bytes.slice(); loadChallenge('BOOT'); };
+
+CH.push({id:'COMPILE', st:'soft', view:'compile', title:'The tiny compiler', req:'BOOT', ins:[], outs:[],
+  text:'Nobody writes 30 bytes of LDA and STA to multiply two numbers. They write <b>x = (a + b) * c</b> and let a program translate it. Here is that program, small enough to see through. Type on the left; watch the tree and the machine code change as you type.',
+  hints:['Every node in the tree becomes a few instructions. Leaves become single loads. Which node produces the most code, and why?',
+    'Your machine has one register, A. When the compiler needs to hold one answer while it works out another, where does it put it? Look for names starting with t.',
+    'while n { … } becomes: test n, jump past the body if it is zero, do the body, jump back to the test. That is exactly the loop you wrote by hand at Cold Start.',
+    'Factorial: start with f = 1 and n = 5. While n is not zero, multiply f by n and take one off n.'],
+  winTitle:'You programmed your machine in a language.',
+  why:'A compiler is a translator with two halves: one reads text into a tree that captures what you meant, the other walks the tree and writes instructions for one particular machine. With a single register, every intermediate answer has to be parked in memory and fetched back, which is why real compilers spend so much effort keeping values in registers. Switch optimisation on and the first program collapses to three instructions, because every value in it was known before it ran. Factorial barely changes: its values depend on the loop, so they can only be found by running it. Knowing what can be settled at compile time and what must wait for run time is half of what compilers are about.',
+  bench:'On a real build, the compiler runs on your laptop, not on the Bench Computer: 224 bytes of RAM is not room enough for a compiler. The bytes it produces go down the “tape” wire to the boot monitor you wrote in Cold Start. Use “Boot it on mark 2” to do exactly that here.'});
+STATIONS.push({id:'soft',name:'Software',req:'BOOT'});
+
+// ================= The whole machine (capstone) =================
+// Every module of the Bench Computer (mark 1), described in terms of the parts in your bin.
+const MODULES=[
+  {id:'clock',name:'Clock',x:120,y:30,parts:[],note:'A 555 timer, not built from gates: it is an analogue circuit that charges and discharges a capacitor. Your single-step button and its debounce latch sit here.',
+   chips:{'555':3,'74HC00':1,'74HC04':1},test:'Blink an LED on the clock output. Switch to manual and check that one press gives exactly one pulse (Find the fault, number 7).',from:'COUNTER'},
+  {id:'pc',name:'Program counter',x:120,y:110,parts:[['DFF',4],['HALF',4],['MUX',4]],note:'Four flip-flops hold the address. Half adders add one each clock (count enable). Selectors choose between counting and loading a jump address from the bus.',
+   chips:{'74HC161':1,'74HC245':1},test:'With the clock running, the four LEDs count 0 to 15 and wrap. Put 9 on the bus and pulse J: the count jumps to 9.',from:'CPU'},
+  {id:'mar',name:'Memory address register',x:120,y:190,parts:[['DFF',4]],note:'Four flip-flops that hold which memory cell is being used.',chips:{'74HC173':1},test:'Load a value from the bus; the four LEDs keep it after the bus changes.',from:'CPU'},
+  {id:'ram',name:'RAM, 16 bytes',x:120,y:270,parts:[['DFF',128],['DECODE',2],['AND',16],['MUX',120]],note:'128 flip-flops in 16 rows of 8. Two of your 2-to-4 decoders and 16 ANDs pick one row out of 16. A tree of 15 selectors per bit picks which row is read.',
+   chips:{'62256':1,'74HC157':3,'DIP switch (8)':1,'DIP switch (4)':1},test:'In programming mode, write 5 to address 2 and 9 to address 0 from the switches; read both back. (Build a memory.)',from:'RAM'},
+  {id:'ir',name:'Instruction register',x:120,y:350,parts:[['DFF',8]],note:'Eight flip-flops. The top four bits go to the control ROM; the bottom four can be put on the bus as an address.',chips:{'74HC173':2,'74HC245':1},test:'Load 0x1E from the bus: the top LEDs show 0001, and IO puts only 1110 back on the bus.',from:'CPU'},
+  {id:'a',name:'Register A',x:560,y:30,parts:[['DFF',8]],note:'Eight of your flip-flops.',chips:{'74HC173':2,'74HC245':1},test:'Load 28 from the bus and read it back out onto the bus.',from:'DFF'},
+  {id:'alu',name:'Adder / subtractor',x:560,y:110,parts:[['FULL',8],['XOR',8]],note:'Your ripple-carry adder, with a row of XORs that inverts B when subtracting (and the carry-in set to 1).',chips:{'74HC283':2,'74HC86':2,'74HC245':1},test:'A = 28, B = 14: the LEDs show 42. Set SU: they show 14. Try 255 + 1 and check the carry.',from:'RACE'},
+  {id:'b',name:'Register B',x:560,y:190,parts:[['DFF',8]],note:'Eight of your flip-flops. Its outputs go only to the adder, never to the bus.',chips:{'74HC173':2},test:'Load 14; the adder immediately shows A + 14.',from:'DFF'},
+  {id:'out',name:'Output display',x:560,y:270,parts:[['DFF',8]],note:'Memory-mapped output in its simplest form: a register the program writes with OUT, and a decoder that turns its value into seven-segment digits.',
+   chips:{'74HC273':1,'AT28C16':1,'7-segment display':4,'555':1,'74HC76':1,'74HC139':1},test:'Load 0, 7, 42, 255 from the bus; the display shows each in decimal. Burn the display ROM image from this page first.',from:'CPU'},
+  {id:'flags',name:'Flags',x:560,y:350,parts:[['DFF',2],['OR',7],['NOT',1]],note:'Two flip-flops remember the carry and whether the last result was zero. Zero detection is eight bits ORed together and inverted.',chips:{'74HC173':1,'74HC08':1,'74HC02':2},test:'Compute 14 − 14 with FI on: the zero LED lights. 255 + 1 lights the carry LED.',from:'ROM'},
+  {id:'ctrl',name:'Control unit',x:560,y:430,parts:[['DFF',3],['HALF',3]],note:'A three-bit step counter (T0 to T4) and the control ROM you wrote. The ROM is not made of your gates: it is a lookup table stored in an EEPROM, 512 words of 16 bits. It could be built from decoders and ORs; storing it is simply cheaper.',
+   chips:{'AT28C16':2,'74HC161':1,'74HC138':1,'74HC04':1},test:'Single-step with no program: the step LEDs go T0 to T4 and back. Load LDA 14 and check the control LEDs match your table at each step.',from:'ROM'},
+  {id:'bus',name:'Bus drivers',x:120,y:430,parts:[['MUX',32]],note:'Five sources can drive the bus. In your gate-level world that is a set of selectors per bit. On the bench it is done with tri-state outputs: each 74HC245 either drives the bus or lets go of it entirely.',chips:{},test:'Only one source LED lit per step. If two ever light, the chips fight (Find the fault).',from:'ROM'}
+];
+const BASE_BOM={'Breadboards (full size)':14,'Solid-core wire, 22 AWG (m)':30,'LEDs':110,'330 Ω resistors':110,'10 kΩ resistors':30,'0.1 µF capacitors (one per chip)':40,'5 V regulated supply':1};
+const CAP={path:[],tab:'zoom',nand:{a:0,b:0}};
+function chipCircuit(name){ const c=P.chips[name]; if(!c) return null; return c.circuit||c.src||P.circuits[name]||null; }
+function nandTotal(){
+  let total=0, missing=new Set();
+  for(const m of MODULES) for(const [p,n] of m.parts){ if(P.chips[p]) total+=P.chips[p].nand*n; else missing.add(p); }
+  return {total,missing:[...missing]};
+}
+function drawCircuitRO(circ){
+  let h=GLOW;
+  const nodes=circ.nodes;
+  for(const w of circ.wires){
+    const a=nodes.find(n=>n.id===w.from.node), b=nodes.find(n=>n.id===w.to.node); if(!a||!b) continue;
+    h+=`<path d="${wirePath(pinPos(a,'o',w.from.pin||0),pinPos(b,'i',w.to.pin))}" stroke="var(--wire)" stroke-width="2.5" fill="none"/>`;
+  }
+  for(const n of nodes){
+    const d=dims(n);
+    if(n.type==='IN') h+=`<rect x="${n.x}" y="${n.y}" width="${d.w}" height="${d.h}" rx="17" fill="#fff" stroke="var(--ink)" stroke-width="2"/><text x="${n.x+d.w/2}" y="${n.y+22}" text-anchor="middle" font-size="14" font-weight="600" fill="var(--ink)">${n.label||''}</text>`;
+    else if(n.type==='OUT') h+=`<circle cx="${n.x+22}" cy="${n.y+22}" r="21" fill="#DADFD9" stroke="var(--ink)" stroke-width="2"/><text x="${n.x+22}" y="${n.y+27}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">${n.label||''}</text>`;
+    else if(n.type==='NAND'){ const w=d.w-26; h+=`<g data-zoom="NAND" style="cursor:zoom-in"><path d="M${n.x},${n.y} H${n.x+w} A26,26 0 0 1 ${n.x+w},${n.y+52} H${n.x} Z" fill="#fff" stroke="var(--ink)" stroke-width="2"/><circle cx="${n.x+w+31}" cy="${n.y+26}" r="5" fill="#fff" stroke="var(--ink)" stroke-width="2"/><text x="${n.x+w/2+6}" y="${n.y+31}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">NAND</text></g>`; }
+    else h+=`<g data-zoom="${n.type}" style="cursor:zoom-in"><rect x="${n.x}" y="${n.y}" width="${d.w}" height="${d.h}" rx="3" fill="var(--chip)"/><text x="${n.x+d.w/2}" y="${n.y+d.h/2+5}" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">${n.type}</text></g>`;
+    for(let i=0;i<nIns(n);i++){ const p=pinPos(n,'i',i); h+=`<circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--ink)"/>`; }
+    for(let j=0;j<nOuts(n);j++){ const p=pinPos(n,'o',j); h+=`<circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--ink)"/>`; }
+  }
+  return `<svg viewBox="0 0 900 520" style="width:100%;height:auto;background:#FBFCF9;border:1px solid var(--line);border-radius:6px">${h}</svg>`;
+}
+function cmosNand(){
+  const {a,b}=CAP.nand, up=!(a&&b), c=(v)=>v?'var(--live)':'var(--wire)';
+  // two P-type in parallel to +5 V (conduct when input is 0), two N-type in series to ground (conduct when input is 1)
+  const pA=!a, pB=!b, nA=!!a, nB=!!b;
+  const tr=(x,y,on,label)=>`<rect x="${x-18}" y="${y-18}" width="36" height="36" rx="4" fill="${on?'#FFF3CC':'#fff'}" stroke="${on?'var(--live)':'var(--ink)'}" stroke-width="2"/><text x="${x}" y="${y+5}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">${label}</text><text x="${x+24}" y="${y+4}" font-size="10" fill="var(--muted)">${on?'closed':'open'}</text>`;
+  return `<svg viewBox="0 0 560 330" style="width:100%;max-width:560px;height:auto;background:#FBFCF9;border:1px solid var(--line);border-radius:6px">
+   <text x="280" y="22" text-anchor="middle" font-size="12" fill="var(--ink)">+5 V</text><line x1="160" y1="30" x2="400" y2="30" stroke="var(--ink)" stroke-width="3"/>
+   <line x1="200" y1="30" x2="200" y2="72" stroke="${c(pA)}" stroke-width="3"/><line x1="360" y1="30" x2="360" y2="72" stroke="${c(pB)}" stroke-width="3"/>
+   ${tr(200,90,pA,'P·A')}${tr(360,90,pB,'P·B')}
+   <line x1="200" y1="108" x2="200" y2="140" stroke="${c(pA&&up)}" stroke-width="3"/><line x1="360" y1="108" x2="360" y2="140" stroke="${c(pB&&up)}" stroke-width="3"/>
+   <line x1="200" y1="140" x2="360" y2="140" stroke="${c(up)}" stroke-width="3"/><line x1="280" y1="140" x2="280" y2="172" stroke="${c(up)}" stroke-width="3"/>
+   <line x1="280" y1="140" x2="470" y2="140" stroke="${c(up)}" stroke-width="3"/><circle cx="490" cy="140" r="18" fill="${up?'var(--live)':'#DADFD9'}" stroke="var(--ink)" stroke-width="2"/><text x="490" y="176" text-anchor="middle" font-size="12" fill="var(--ink)">output ${up?1:0}</text>
+   ${tr(280,190,nA,'N·A')}<line x1="280" y1="208" x2="280" y2="232" stroke="${c(nA&&nB)}" stroke-width="3"/>${tr(280,250,nB,'N·B')}
+   <line x1="280" y1="268" x2="280" y2="296" stroke="var(--ink)" stroke-width="3"/><line x1="240" y1="296" x2="320" y2="296" stroke="var(--ink)" stroke-width="3"/><text x="280" y="316" text-anchor="middle" font-size="12" fill="var(--ink)">ground</text>
+   <g data-nand="a" style="cursor:pointer"><rect x="20" y="70" width="80" height="34" rx="17" fill="${a?'var(--ink)':'#fff'}" stroke="var(--ink)" stroke-width="2"/><text x="60" y="92" text-anchor="middle" font-size="14" font-weight="600" fill="${a?'#fff':'var(--ink)'}">A = ${a}</text></g>
+   <g data-nand="b" style="cursor:pointer"><rect x="20" y="230" width="80" height="34" rx="17" fill="${b?'var(--ink)':'#fff'}" stroke="var(--ink)" stroke-width="2"/><text x="60" y="252" text-anchor="middle" font-size="14" font-weight="600" fill="${b?'#fff':'var(--ink)'}">B = ${b}</text></g>
+  </svg>`;
+}
+function renderZoom(){
+  const path=CAP.path, crumbs=['The Bench Computer',...path.map(p=>p.label)];
+  $('#capcrumb').innerHTML=crumbs.map((c,i)=>i<crumbs.length-1?`<button class="btn" data-crumb="${i}">${c}</button> ›`:`<b>${c}</b>`).join(' ');
+  const top=path[path.length-1]; let h='';
+  if(!top){
+    let s=GLOW+`<rect x="430" y="20" width="40" height="470" rx="4" fill="#E2E6E0"/><text x="450" y="260" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)" transform="rotate(-90 450 260)">the bus</text>`;
+    for(const m of MODULES){
+      const w=220, hh=58, built=m.parts.every(([p])=>P.chips[p]);
+      const n=m.parts.reduce((t,[p,c])=>t+(P.chips[p]?P.chips[p].nand*c:0),0);
+      s+=`<g data-mod="${m.id}" style="cursor:zoom-in"><rect x="${m.x}" y="${m.y}" width="${w}" height="${hh}" rx="4" fill="#fff" stroke="${built?'var(--ink)':'var(--bad)'}" stroke-width="2"/><text x="${m.x+10}" y="${m.y+22}" font-size="14" font-weight="600" fill="var(--ink)">${m.name}</text><text x="${m.x+10}" y="${m.y+44}" font-size="11" fill="var(--muted)">${m.parts.length?n.toLocaleString()+' NAND of yours':'not made of gates'}</text></g>`;
+      s+=`<line x1="${m.x<450?m.x+w:m.x}" y1="${m.y+29}" x2="${m.x<450?430:470}" y2="${m.y+29}" stroke="var(--wire)" stroke-width="2"/>`;
+    }
+    h=`<svg viewBox="0 0 900 500" style="width:100%;height:auto;background:#FBFCF9;border:1px solid var(--line);border-radius:6px">${s}</svg>`;
+    const T=nandTotal();
+    h+=`<div class="readout" style="margin-top:8px"><div><small>Your computer, in NAND gates</small><b>${T.total.toLocaleString()}</b><small>${T.missing.length?'not yet counted: '+T.missing.join(', '):'every one designed by you'}</small></div>`+
+      `<div><small>In transistors (4 per NAND)</small><b>${(T.total*4).toLocaleString()}</b><small>plus the ROMs, which store rather than compute</small></div>`+
+      `<div><small>A current laptop processor</small><b>~10¹¹</b><small>about ${T.total?Math.round(1e11/(T.total*4)/1e6).toLocaleString()+' million':'many million'} of your computers</small></div></div>`;
+  } else if(top.kind==='mod'){
+    const m=MODULES.find(x=>x.id===top.id);
+    h=`<p style="max-width:80ch">${m.note}</p><div class="jobs">`+(m.parts.length?m.parts.map(([p,n])=>{ const c=P.chips[p];
+      return `<div class="job ${c?'ok':'no'}" data-part="${p}" style="cursor:${c?'zoom-in':'default'}"><b>${n} × ${p}</b><span>${c?`${c.nand} NAND each, ${ (c.nand*n).toLocaleString()} in all`:'not built yet'}</span><small>${c?'click to look inside':''}</small></div>`; }).join(''):'<p>Nothing here is made of your gates.</p>')+'</div>';
+  } else if(top.kind==='chip'){
+    if(top.id==='NAND'){
+      h=`<p style="max-width:80ch">The bottom of your parts bin. Inside a NAND gate: four transistors, each a switch controlled by a voltage. The two P-type switches close when their input is 0; the two N-type close when their input is 1. Each switch is labelled with the input that controls it. Flip A and B.</p>${cmosNand()}<p style="max-width:80ch">The output can only be pulled to ground if <b>both</b> bottom switches are closed, which needs A and B both 1. Any other time, a top switch connects it to +5 V. That is NAND, and there is nothing further down but physics: switches all the way down.</p>`;
+    } else {
+      const circ=chipCircuit(top.id), c=P.chips[top.id];
+      h=circ?`<p>Your ${top.id}: ${c.nand} NAND, delay ${Math.max(...c.depths)}. Click any part inside it to go further down.</p>${drawCircuitRO(circ)}`:`<p>This part was built before the Workbench started keeping circuits. Rebuild it in its station and it will appear here.</p>`;
+    }
+  }
+  $('#capbody').innerHTML=h;
+}
+function bom(){
+  const b={...BASE_BOM};
+  for(const m of MODULES) for(const [k,v] of Object.entries(m.chips)) b[k]=(b[k]||0)+v;
+  const ics=Object.entries(b).filter(([k])=>/^(74|555|62256|AT28)/.test(k)).reduce((t,[,v])=>t+v,0);
+  delete b['0.1 µF capacitors (one per chip)']; b[`0.1 µF capacitors (one per chip)`]=ics;
+  return Object.fromEntries(Object.entries(b).sort((x,y)=>/^(74|555|62|AT)/.test(y[0])-/^(74|555|62|AT)/.test(x[0])||x[0].localeCompare(y[0])));
+}
+function manualText(){
+  const b=bom(), order=['clock','a','b','alu','ram','mar','pc','out','ir','bus','flags','ctrl'];
+  let t=`# The Bench Computer: build manual\n\nGenerated by the Workbench from the parts you designed.\nYour design contains ${nandTotal().total.toLocaleString()} NAND-gate equivalents; on the bench most of them come ready-made inside 74HC chips.\n\n## Parts list\n\n`;
+  for(const [k,v] of Object.entries(b)) t+=`- ${v} × ${k}\n`;
+  t+=`\n## Before you start\n\n- Run +5 V and ground along every breadboard rail and check it with a meter before any chip goes in.\n- One 0.1 µF capacitor across the power pins of every chip.\n- Every unused CMOS input to ground or +5 V. A floating input causes the intermittent faults you met in Find the fault.\n- Put LEDs on every register and on the bus as you go.\n\n## Build order (test each module before starting the next)\n\n`;
+  order.forEach((id,i)=>{ const m=MODULES.find(x=>x.id===id);
+    t+=`### ${i+1}. ${m.name}\n\nChips: ${Object.entries(m.chips).map(([k,v])=>`${v} × ${k}`).join(', ')||'none (wiring only)'}\n\n${m.note}\n\nTest: ${m.test}\n\n`; });
+  t+=`## Bring-up\n\n1. Burn your two control ROM images (Write the control ROM) and the display image (this page).\n2. Enter 28 + 14 with the programming switches (Assemble by hand) and run at the slowest clock: the display must read 42.\n3. Enter the countdown and run it. If anything goes wrong, single-step and compare every LED against the processor view with your ROM.\n`;
+  return t;
+}
+function displayRom(){
+  // Seven-segment patterns, bit order dp a b c d e f g (common cathode).
+  const seg=[0x7e,0x30,0x6d,0x79,0x33,0x5b,0x5f,0x70,0x7f,0x7b], img=new Uint8Array(2048);
+  for(let v=0;v<256;v++){
+    img[v]=seg[v%10]; img[v+256]=seg[Math.floor(v/10)%10]; img[v+512]=seg[Math.floor(v/100)%10]; img[v+768]=0;
+    const s=v>127?v-256:v, a=Math.abs(s);
+    img[v+1024]=seg[a%10]; img[v+1280]=seg[Math.floor(a/10)%10]; img[v+1536]=seg[Math.floor(a/100)%10]; img[v+1792]=s<0?0x01:0;
+  }
+  return img;
+}
+function renderManual(){
+  const b=bom();
+  $('#capbody').innerHTML=`<div class="toolbar"><button class="btn dark" id="capdl">Download the build manual</button><button class="btn" id="capdisp">Download the display ROM image</button>${P.solved.ROM?'<button class="btn" id="caprom">Download your control ROMs</button>':''}</div>`+
+    `<h2 style="margin-top:12px">Parts list</h2><div class="legend">${Object.entries(b).map(([k,v])=>`<span><b>${v}×</b> ${k}</span>`).join('')}</div>`+
+    `<pre style="white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:6px;padding:12px;font-family:Barlow;font-size:14px;max-height:520px;overflow:auto">${manualText().replace(/</g,'&lt;')}</pre>`;
+  $('#capdl').onclick=()=>dl(new TextEncoder().encode(manualText()),'bench-computer-build-manual.md');
+  $('#capdisp').onclick=()=>dl(displayRom(),'display-rom.bin');
+  if($('#caprom')) $('#caprom').onclick=()=>{ const {hi,lo}=romImages(); dl(hi,'control-rom-1-high.bin'); setTimeout(()=>dl(lo,'control-rom-2-low.bin'),400); };
+}
+const STACK=[
+  ['Applications','Part Nine',[]],['Networks','Part Eight',[]],['Operating system','Part Seven',[]],
+  ['Languages and compilers','Chapter 29','COMPILE'],['Booting','Chapter 34','BOOT'],['Machine code and instruction sets','Chapter 19','ISA'],
+  ['Control and the processor','Chapter 18','ROM'],['Memory','Chapter 16','RAM'],['Clock and timing','Chapter 16','COUNTER'],
+  ['Arithmetic','Chapter 15','RACE'],['Logic gates','Chapter 14','XOR'],['Switches (transistors)','Chapter 13','NOT']];
+function renderStack(){
+  let s='', y=10;
+  STACK.forEach(([name,ch,req])=>{ const lit=req.length&&P.solved[req];
+    s+=`<rect x="120" y="${y}" width="560" height="34" rx="4" fill="${lit?'var(--live)':'#fff'}" stroke="${lit?'var(--ink)':'var(--line)'}" stroke-width="${lit?2:1}"/><text x="140" y="${y+22}" font-size="14" font-weight="${lit?700:400}" fill="var(--ink)">${name}</text><text x="660" y="${y+22}" text-anchor="end" font-size="12" fill="var(--muted)">${lit?'you built this':ch}</text>`;
+    y+=40; });
+  s+=`<path d="M100,${10+3*40} L100,${y-6}" stroke="var(--ink)" stroke-width="3"/><text x="90" y="${(10+3*40+y)/2}" text-anchor="middle" font-size="12" fill="var(--ink)" transform="rotate(-90 90 ${(10+3*40+y)/2})">your Bench Computer</text>`;
+  $('#capbody').innerHTML=`<p style="max-width:80ch">Chapter 1 slowed down one tap on a phone screen and found this stack underneath it. Here it is again. Every lit layer is one you have now built yourself, from the NAND gate up. The unlit layers above are the rest of the book: they are all built out of the lit ones.</p><svg viewBox="0 0 800 ${y+10}" style="width:100%;max-width:800px;height:auto">${s}</svg>`;
+}
+function renderCapstone(){
+  $('#captabs').innerHTML=[['zoom','Zoom into your computer'],['manual','Build manual'],['stack','The whole stack']].map(([k,n])=>`<button class="btn ${CAP.tab===k?'dark':''}" data-tab="${k}">${n}</button>`).join('');
+  $('#capcrumb').style.display=CAP.tab==='zoom'?'':'none';
+  if(CAP.tab==='zoom') renderZoom(); else if(CAP.tab==='manual') renderManual(); else renderStack();
+  if(!P.solved.WHOLE){ P.solved.WHOLE={}; save(); renderSteps(); }
+  $('#status').textContent=CAP.tab==='zoom'?'Click any module, then any part, to descend. The trail at the top brings you back up.':'';
+}
+$('#captabs').addEventListener('click',e=>{ const b=e.target.closest('[data-tab]'); if(b){ CAP.tab=b.dataset.tab; renderCapstone(); } });
+$('#capcrumb').addEventListener('click',e=>{ const b=e.target.closest('[data-crumb]'); if(b){ CAP.path=CAP.path.slice(0,+b.dataset.crumb); renderZoom(); } });
+$('#capbody').addEventListener('click',e=>{
+  if(CAP.tab!=='zoom') return;
+  const m=e.target.closest('[data-mod]'), p=e.target.closest('[data-part]'), z=e.target.closest('[data-zoom]'), nb=e.target.closest('[data-nand]');
+  if(nb){ CAP.nand[nb.dataset.nand]^=1; renderZoom(); return; }
+  if(m){ const mod=MODULES.find(x=>x.id===m.dataset.mod); CAP.path.push({kind:'mod',id:mod.id,label:mod.name}); }
+  else if(p&&P.chips[p.dataset.part]) CAP.path.push({kind:'chip',id:p.dataset.part,label:p.dataset.part});
+  else if(z) CAP.path.push({kind:'chip',id:z.dataset.zoom,label:z.dataset.zoom==='NAND'?'NAND: four switches':z.dataset.zoom});
+  else return;
+  renderZoom();
+});
+
+CH.push({id:'WHOLE', st:'soft', view:'capstone', title:'The whole machine', req:'COMPILE', ins:[], outs:[],
+  text:'Everything you built, in one place. <b>Zoom</b> from the finished computer down through your own parts to the transistors. Take the <b>build manual</b> to the bench. See where your machine sits in <b>the whole stack</b> this book set out to explain.',
+  hints:['Start at Register A and keep clicking down. How many levels until you reach something you did not design?','Which module has the most NAND gates in it? Is that where you expected the cost of a computer to be?'],
+  winTitle:'Switches all the way down.',
+  why:'Every level you can click through is one you designed and tested: the computer is registers, bus and control; a register is flip-flops; a flip-flop is latches; a latch is gates chasing each other; a gate is four switches. At no level did anything new appear, only arrangement. That is the argument of this book, and you no longer have to take it on trust.',
+  bench:'Everything you need is in the build manual: the parts list, the order to build in, a test for every module, and the ROM images for the control unit and the display. Build one module at a time and never move on until its test passes.'});
+
+// ================= Clock =================
+// A chip holds its answer back for its internal delay, so "nothing changed this tick"
+// is not proof of settling. Wait longer than the slowest part on the board.
+function settleWindow(nodes){ return 3+Math.max(0,...nodes.map(n=>chipOf(n)?Math.max(...chipOf(n).depths):0)); }
+
+function tick(){
+  const c=cur();
+  if(c.race){ raceTick(); renderRace(); }
+  else if(c.view==='counter'){ if(!C.paused){ counterTick(); renderCounter(); } }
+  else if(c.view==='ram'){ ramTick(); renderRam(); }
+  else if(c.view==='cpu'){ if(U.running){ cpuMicro(); renderCpu(); } }
+  else if(c.view==='rom'){}
+  else if(c.view==='boot'){ if(K.running){ kstep(); renderBoot(); } }
+  else{
+    const changed=step(S.nodes,S.wires,S.out,S.q);
+    S.stable=changed?0:S.stable+1;
+    if(S.auto&&S.auto.seq){
+      if(S.stable>=settleWindow(S.nodes)||++S.auto.wait>200){
+        S.seqGot[S.auto.i]=S.nodes.filter(n=>n.type==='OUT').map(n=>(S.out[n.id]||[0])[0]?1:0).join(' ');
+        S.auto.i++; S.auto.wait=0;
+        if(S.auto.i<c.seq.length) applySeq(S.auto.i); else { S.auto=null; checkSeqWin(); }
+      }
+    }
+    else if(S.stable===settleWindow(S.nodes)&&!c.seq){
+      const ins=S.nodes.filter(n=>n.type==='IN'); let r=0; ins.forEach(n=>r=r*2+(n.v?1:0));
+      S.observed[r]=S.nodes.filter(n=>n.type==='OUT').map(n=>(S.out[n.id]||[0])[0]?1:0).join(' ');
+      checkWin();
+      if(S.auto){ S.auto.r++; S.auto.wait=0; if(S.auto.r<(1<<ins.length)) setInputs(S.auto.r); else { S.auto=null; setInputs(0);} }
+    }
+    if(S.auto&&!S.auto.seq&&S.stable===0&&++S.auto.wait>80){ S.auto=null; }
+    renderBoard(); renderSide();
+  }
+  setTimeout(tick,+$('#speed').value);
+}
+function openFromHash(){
+  // workbench.html#adder opens that station, workbench.html#XOR that challenge, each only when it is unlocked
+  const h=decodeURIComponent((location.hash||'').slice(1)); let target=null;
+  if(h){ const c=CH.find(x=>x.id===h);
+    if(c&&solved(c.req)) target=c.id;
+    else { const st=CH.filter(x=>x.st===h); const t=st.find(x=>solved(x.req)&&!P.solved[x.id])||st.find(x=>solved(x.req)); if(t) target=t.id; } }
+  const first=CH.find(c=>solved(c.req)&&!P.solved[c.id]);
+  loadChallenge(target||(first?first.id:'FREE'));
+}
+(async()=>{
+  await load(); openFromHash(); tick();
+  window.addEventListener('hashchange',openFromHash);
+})();
+
+</script>

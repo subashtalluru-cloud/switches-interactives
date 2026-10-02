@@ -1,0 +1,142 @@
+<meta charset="utf-8">
+<!-- Follow the Pointer — Switches All the Way Down, Chapter 30 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--violet)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.violet{background:var(--violet);color:#fff;border-color:var(--violet)}.btn.cyan{background:var(--cyan);color:#fff;border-color:var(--cyan)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+svg{display:block;width:100%;height:auto;background:#FAFBFE;border:1px solid var(--line);border-radius:10px}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:22px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.note{background:#EEE8FB;border:1px solid #D3C4F3;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+input[type=number]{width:70px;font:inherit;font-weight:700;border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Follow the <span>pointer</span></h1>
+  <p>Memory is a street of numbered houses, each holding one value. A pointer is just a house number written inside another house. That one idea — a value that is an address — builds every data structure there is. Here are the two oldest: the array and the linked list.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar"><span style="color:var(--soft)">Structure:</span>
+      <button class="btn on" data-s="array">Array</button>
+      <button class="btn" data-s="list">Linked list</button>
+      <span style="flex:1"></span>
+      <span style="color:var(--soft)">Insert</span><input type="number" id="ival" value="55"><span>at position</span><input type="number" id="ipos" value="2" min="0">
+      <button class="btn violet" id="ins">Insert</button>
+      <button class="btn cyan" id="walk">Walk it</button>
+      <button class="btn" id="reset">Reset</button></div>
+  </section>
+  <section class="card">
+    <svg id="mem" viewBox="0 0 1140 470" aria-label="Memory street"></svg>
+    <div id="say" style="min-height:24px;margin-top:8px;font-size:15px"></div>
+  </section>
+  <div class="read" id="read"></div>
+  <section class="card">
+    <h2>With the cache switched on</h2>
+    <div class="bar"><button class="btn" id="cache">Cache: off</button><span style="color:var(--soft);font-size:14px">Nearby houses are fetched together, 4 at a time. Walk each structure and count the slow trips to main memory.</span></div>
+  </section>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+// A "street" of 40 houses. The array occupies a contiguous run; the list is scattered.
+const NH=40;
+let mode='array', houses=[], head=0, cacheOn=false, seen={}, anim=null;
+function reset(){
+  houses=Array(NH).fill(null);
+  if(mode==='array'){ [10,20,30,40].forEach((v,i)=>houses[4+i]={v}); arrStart=4; arrLen=4; }
+  else { // scatter the list
+    const spots=[6,21,13,34]; const vals=[10,20,30,40]; head=spots[0];
+    spots.forEach((s,i)=>houses[s]={v:vals[i],next:i<spots.length-1?spots[i+1]:-1}); }
+  $('#say').innerHTML=''; render();
+}
+let arrStart=4, arrLen=4;
+function render(hl){
+  const cols=10, cw=110, ch=104, ox=14, oy=14;
+  let h='<defs><marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#7A4FE0"/></marker></defs>';
+  for(let i=0;i<NH;i++){ const r=Math.floor(i/cols), c=i%cols, x=ox+c*cw, y=oy+r*ch, occ=houses[i];
+    const inHl=hl&&hl.includes(i);
+    h+=`<rect x="${x}" y="${y}" width="${cw-12}" height="${ch-14}" rx="8" fill="${occ?(mode==='list'?'#EEE8FB':'#E1F0FB'):'#fff'}" stroke="${inHl?'#E8A400':occ?(mode==='list'?'#7A4FE0':'#0090C8'):'#E2E5EE'}" stroke-width="${inHl?4:1.5}"/>`;
+    h+=`<text x="${x+6}" y="${y+18}" font-size="12" fill="#5B6172" font-family="JetBrains Mono,monospace">#${i}</text>`;
+    if(occ){ h+=`<text x="${x+(cw-12)/2}" y="${y+52}" text-anchor="middle" font-size="26" font-weight="800">${occ.v}</text>`;
+      if(mode==='list'){ h+=`<text x="${x+6}" y="${y+80}" font-size="12" fill="#7A4FE0" font-family="JetBrains Mono,monospace">next→ ${occ.next<0?'end':'#'+occ.next}</text>`; } }
+  }
+  // list arrows
+  if(mode==='list'){ let p=head, guard=0; while(p>=0&&guard++<NH){ const occ=houses[p]; if(!occ) break; const r=Math.floor(p/cols),c=p%cols, x=ox+c*cw+(cw-12)/2, y=oy+r*ch+ch-14;
+    if(occ.next>=0){ const nr=Math.floor(occ.next/cols),nc=occ.next%cols, nx=ox+nc*cw+(cw-12)/2, ny=oy+nr*ch;
+      h+=`<path d="M${x},${y} C${x},${y+34} ${nx},${ny-34} ${nx},${ny}" stroke="#7A4FE0" stroke-width="2.5" fill="none" marker-end="url(#ar)" opacity=".55"/>`; } p=occ.next; } 
+    const hr=Math.floor(head/cols),hc=head%cols; h+=`<text x="${ox+hc*cw+(cw-12)/2}" y="${oy+hr*ch-4}" text-anchor="middle" font-size="13" font-weight="700" fill="#7A4FE0">head</text>`; }
+  $('#mem').innerHTML=h;
+  const occ=houses.filter(Boolean).length;
+  $('#read').innerHTML=`<div><small>Structure</small><b>${mode}</b></div><div><small>Values stored</small><b>${occ}</b></div><div><small>To read the 3rd value, houses touched</small><b>${mode==='array'?1:3}</b><small>${mode==='array'?'jump straight there':'follow 3 links'}</small></div>`;
+  renderQs();
+}
+document.querySelector('main').addEventListener('click',e=>{ const b=e.target.closest('[data-s]'); if(b){ mode=b.dataset.s; document.querySelectorAll('[data-s]').forEach(x=>x.classList.toggle('on',x===b)); reset(); } });
+$('#reset').onclick=reset;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function walk(){
+  let touched=0, misses=0, loaded=new Set();
+  if(mode==='array'){ for(let i=0;i<arrLen;i++){ const idx=arrStart+i; touched++; if(cacheOn){ const line=idx-idx%4; if(!loaded.has(line)){ misses++; loaded.add(line); } } else misses++;
+    render([idx]); $('#say').innerHTML=`Reading value ${i+1}: house #${idx}. ${cacheOn?`${idx%4===0?'a slow trip to memory, which also pulls in the next 3 houses':'already in the cache from the last trip — instant'}`:''}`; await sleep(650); } }
+  else { let p=head, n=0; while(p>=0){ touched++; if(cacheOn){ const line=p-p%4; if(!loaded.has(line)){ misses++; loaded.add(line); } } else misses++;
+    render([p]); $('#say').innerHTML=`Value ${++n}: house #${p}. ${cacheOn?'each node is somewhere different, so almost every step is a slow trip to memory':'follow the “next” to the next house'}`; await sleep(650); p=houses[p].next; } }
+  $('#say').innerHTML+=`<br><b>Walked the whole structure: ${touched} houses touched${cacheOn?`, ${misses} slow trips to main memory`:''}.</b>`;
+  render();
+  if(cacheOn){ if(mode==='array') find('arraycache'); else find('listcache'); }
+}
+$('#walk').onclick=walk;
+$('#cache').onclick=()=>{ cacheOn=!cacheOn; $('#cache').textContent=`Cache: ${cacheOn?'on':'off'}`; $('#cache').classList.toggle('on',cacheOn); };
+function insert(){
+  const v=+$('#ival').value, pos=Math.max(0,+$('#ipos').value);
+  if(mode==='array'){
+    // must shift every later value up one house
+    const vals=[]; for(let i=0;i<arrLen;i++) vals.push(houses[arrStart+i].v);
+    vals.splice(Math.min(pos,vals.length),0,v);
+    for(let i=0;i<arrLen;i++) houses[arrStart+i]=null; arrLen=vals.length;
+    if(arrStart+arrLen>NH) arrStart=Math.max(0,NH-arrLen);
+    vals.forEach((x,i)=>houses[arrStart+i]={v:x});
+    $('#say').innerHTML=`Inserting ${v} at position ${pos} in the array: every value after it had to shift up one house — ${Math.max(0,vals.length-1-pos)} moves. In a big array, that is the expensive part.`;
+    find('arrayins');
+  } else {
+    // find a free house, splice in by rewriting one 'next'
+    let free=houses.findIndex(x=>!x); if(free<0) return;
+    let prev=-1, p=head, n=0; while(p>=0&&n<pos){ prev=p; p=houses[p].next; n++; }
+    houses[free]={v,next:p};
+    if(prev<0) head=free; else houses[prev].next=free;
+    $('#say').innerHTML=`Inserting ${v} into the list: put it in the first free house (#${free}) and rewrite one “next” pointer. Nothing else moved, however long the list is.`;
+    find('listins');
+  }
+  render();
+}
+$('#ins').onclick=insert;
+const FINDS=[
+ ['arrayins','Insert a value near the front of the array. How many values had to move?'],
+ ['listins','Insert a value into the middle of the linked list. What moved?'],
+ ['arraycache','Switch the cache on and walk the array.'],
+ ['listcache','Switch the cache on and walk the linked list.']];
+const TELL={
+ arrayins:'To insert into an array you must shove everything after the gap up by one house, because an array’s whole trick is that its values sit in a row: value number k lives at start + k, so the machine can jump straight to any one. Keep that promise and inserting in the middle is expensive.',
+ listins:'The list inserted in two steps: drop the value in any free house, and rewrite a single “next”. Nothing shifted, because the list never promised its values would be in a row. It promised only that each node knows where the next one lives. Cheap inserts, at a price you are about to see.',
+ arraycache:'The array flies. Its values are neighbours, so one slow trip to memory drags in four at once, and three of every four reads are already waiting in the cache. Being in a row is not just about jumping to an index; it is what makes a cache work.',
+ listcache:'The list crawls. Each node sits in a different, scattered house, so nearly every step is a fresh slow trip to memory — the very misses you placed by hand in “You are the cache”. This is why, on real machines, a humble array often beats a clever linked structure: not because it does less work, but because it respects the cache. The tidy theory and the fast reality disagree, and the cache is why.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+reset();
+</script>

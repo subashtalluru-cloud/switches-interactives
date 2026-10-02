@@ -1,0 +1,169 @@
+<meta charset="utf-8">
+<!-- E6 · The Noise Slider — Switches All the Way Down, Chapter 7 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2;--red:#FF3B3B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1200px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 340px;gap:16px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--sun)}
+header p{margin:4px 0 0;color:var(--soft);max-width:78ch}
+h2{font-size:16px;margin:0 0 6px;font-weight:700}
+.panel{background:var(--night2);border-radius:10px;padding:14px}
+.ctrls{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center}
+.slider{display:flex;align-items:center;gap:12px}
+.slider input{flex:1;accent-color:var(--pink);height:28px}
+.big{font-family:"JetBrains Mono",monospace;font-size:22px;font-weight:700;color:var(--pink);min-width:110px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:none;border-radius:6px;padding:8px 12px;cursor:pointer;background:var(--night3);color:#fff}
+.btn.on{background:var(--cyan);color:var(--ink)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+canvas{display:block;width:100%;height:auto;border-radius:8px;background:#0F0B2E}
+.decoded{font-family:"JetBrains Mono",monospace;font-size:22px;letter-spacing:3px;margin-top:6px}
+.decoded .e{color:var(--red);text-decoration:underline}
+.decoded .k{color:var(--green)}
+.meta{display:flex;justify-content:space-between;color:var(--soft);font-size:13px;margin-top:2px}
+.count{font-family:"JetBrains Mono",monospace;font-weight:700}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:10px;font-size:14px}
+.q{background:var(--night3);border-radius:8px;padding:10px;margin-bottom:8px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Why <span>two</span>?</h1>
+  <p>The same sixteen digits travel down two wires at once, and every wire picks up noise. The top channel packs many voltage levels into one wire. The bottom one uses only two levels, on four wires. Turn up the noise and see which one you can still read.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:12px">
+  <div class="panel ctrls">
+    <div class="slider"><strong>Noise</strong><input type="range" id="noise" min="0" max="1000" value="0" aria-label="Noise"><span class="big" id="nv">0.00 V</span></div>
+    <div class="bar"><span style="color:var(--soft);font-size:13px">Top channel levels</span><span id="lv"></span></div>
+    <div class="bar" style="grid-column:1/-1">
+      <button class="btn" id="chain">Pass through 20 stages: off</button>
+      <button class="btn on" id="restore" disabled>Each stage restores the signal</button>
+      <span style="color:var(--soft);font-size:13px" id="chainsay"></span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2 id="toph">Top: one wire, 10 levels</h2>
+    <canvas id="top" width="1600" height="420"></canvas>
+    <div class="decoded" id="topd"></div><div class="meta"><span>Received digits (red: wrong)</span><span class="count" id="topc"></span></div>
+  </div>
+  <div class="panel">
+    <h2>Bottom: four wires, 2 levels each</h2>
+    <canvas id="bot" width="1600" height="420"></canvas>
+    <div class="decoded" id="botd"></div><div class="meta"><span>Received digits (red: wrong)</span><span class="count" id="botc"></span></div>
+  </div>
+</main>
+<aside style="display:flex;flex-direction:column;gap:12px">
+  <div class="panel"><h2>Error rate against noise</h2><canvas id="curve" width="640" height="460"></canvas>
+    <div class="bar" style="font-size:13px;margin-top:6px;gap:12px"><span style="color:#FF2E88">━ 10 levels</span><span style="color:#FF6B00">━ 4</span><span style="color:#FFC700">━ 3</span><span style="color:#00C2FF">━ 2 (one wire)</span><span style="color:#00C48C">━ 4 wires × 2</span></div><p style="font-size:13px;color:var(--soft);margin:6px 0 0">Share of digits received wrongly, for each number of levels on one wire, and for four two-level wires. The vertical line is your noise setting.</p></div>
+  <div class="panel"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></div>
+</aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), MSG=[...'2718281828459045'].map(Number), VMAX=5, STAGES=20;
+let L=10, sigma=0, chain=false, restore=true, seen={};
+// Gaussian noise via Box–Muller.
+const gauss=()=>{ let u=0,v=0; while(!u) u=Math.random(); while(!v) v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+const levelV=(sym,l)=>sym/(l-1)*VMAX, nearest=(v,l)=>Math.max(0,Math.min(l-1,Math.round(v/VMAX*(l-1))));
+// A digit 0–9 needs k symbols in base l.
+const symsPer=l=>Math.ceil(Math.log(10)/Math.log(l)-1e-9);
+function toSyms(d,l){ const k=symsPer(l), s=[]; for(let i=0;i<k;i++){ s.unshift(d%l); d=Math.floor(d/l); } return s; }
+const fromSyms=(s,l)=>s.reduce((a,x)=>a*l+x,0);
+// Send one symbol through the line, or through twenty stages, with or without restoration.
+function send(sym,l,sg,ch,rest){
+  let v=levelV(sym,l), trace=[];
+  const n=ch?STAGES:1;
+  for(let i=0;i<n;i++){ v+=sg*gauss(); if(ch&&rest&&i<n-1) v=levelV(nearest(v,l),l); trace.push(v); }
+  return {v,sym:nearest(v,l)};
+}
+function transmitTop(sg,l=L,ch=chain,rest=restore){
+  return MSG.map(d=>{ const s=toSyms(d,l), rx=s.map(x=>send(x,l,sg,ch,rest)); const got=fromSyms(rx.map(r=>r.sym),l); return {d,got:got>9?'?':got,wrong:got!==d,sent:s,rx}; });
+}
+function transmitBot(sg,ch=chain,rest=restore){
+  return MSG.map(d=>{ const bits=[3,2,1,0].map(b=>(d>>b)&1), rx=bits.map(x=>send(x,2,sg,ch,rest)); const got=rx.reduce((a,r)=>a*2+r.sym,0); return {d,got:got>9?'?':got,wrong:got!==d,sent:bits,rx}; });
+}
+function scope(cv,wires,l){
+  const g=cv.getContext('2d'), W=cv.width, H=cv.height, n=wires[0].length, rowH=H/wires.length;
+  g.clearRect(0,0,W,H);
+  wires.forEach((w,r)=>{
+    const top=r*rowH+14, h=rowH-28, y=v=>top+h-(Math.max(-2,Math.min(VMAX+2,v))+2)/(VMAX+4)*h;
+    // decision thresholds between levels
+    g.setLineDash([8,8]); g.strokeStyle='rgba(255,199,0,.55)'; g.lineWidth=2;
+    for(let i=0;i<l-1;i++){ const t=(i+.5)/(l-1)*VMAX; g.beginPath(); g.moveTo(0,y(t)); g.lineTo(W,y(t)); g.stroke(); }
+    g.setLineDash([]);
+    const sw=W/n;
+    // intended signal
+    g.strokeStyle='rgba(0,194,255,.35)'; g.lineWidth=6; g.beginPath();
+    w.forEach((s,i)=>{ const v=levelV(s.sent,l); g.lineTo(i*sw,y(v)); g.lineTo((i+1)*sw,y(v)); }); g.stroke();
+    // what arrived: jagged within each symbol period, ending at the value the receiver judges
+    w.forEach((s,i)=>{ const base=s.v; g.strokeStyle=s.bad?'#FF3B3B':'#FF2E88'; g.lineWidth=3; g.beginPath();
+      for(let k=0;k<=24;k++){ const jit=k===24?0:sigma*gauss()*0.8; g.lineTo(i*sw+k*sw/24,y(base+jit)); } g.stroke();
+      g.fillStyle=s.bad?'#FF3B3B':'#00C48C'; g.beginPath(); g.arc((i+.5)*sw,y(base),7,0,7); g.fill(); });
+    if(wires.length>1){ g.fillStyle='#C9C4F2'; g.font='22px Barlow'; g.fillText(`wire ${r+1}`,8,top+18); }
+  });
+}
+function draw(){
+  const t=transmitTop(sigma), b=transmitBot(sigma);
+  // flatten top symbols into one wire
+  const topWire=[]; t.forEach(x=>x.sent.forEach((s,i)=>topWire.push({sent:s,v:x.rx[i].v,bad:x.rx[i].sym!==s})));
+  scope($('#top'),[topWire],L);
+  const botWires=[0,1,2,3].map(w=>b.map(x=>({sent:x.sent[w],v:x.rx[w].v,bad:x.rx[w].sym!==x.sent[w]})));
+  scope($('#bot'),botWires,2);
+  const show=(arr,el,cel)=>{ $(el).innerHTML=arr.map(x=>`<span class="${x.wrong?'e':'k'}">${x.got}</span>`).join(''); const n=arr.filter(x=>x.wrong).length; $(cel).textContent=`${n} of 16 wrong`; return n; };
+  const te=show(t,'#topd','#topc'), be=show(b,'#botd','#botc');
+  $('#toph').textContent=`Top: one wire, ${L} levels${symsPer(L)>1?` (${symsPer(L)} symbols per digit)`:''}`;
+  checkFinds(te,be);
+}
+// The error-rate curves are estimated by sending many digits at each noise level.
+let curveCache=null;
+function computeCurves(){
+  const pts=40, maxS=2.5, series=[10,4,3,2].map(l=>({l,ys:[]})), bin={l:'4×2',ys:[]};
+  for(let p=0;p<=pts;p++){ const sg=p/pts*maxS;
+    series.forEach(s=>{ let e=0,N=0; for(let r=0;r<12;r++){ transmitTop(sg,s.l).forEach(x=>{ N++; if(x.wrong) e++; }); } s.ys.push(e/N); });
+    let e=0,N=0; for(let r=0;r<12;r++){ transmitBot(sg).forEach(x=>{ N++; if(x.wrong) e++; }); } bin.ys.push(e/N); }
+  curveCache={series,bin,pts,maxS};
+}
+function drawCurve(){
+  if(!curveCache) computeCurves();
+  const {series,bin,pts,maxS}=curveCache, cv=$('#curve'), g=cv.getContext('2d'), W=cv.width, H=cv.height, x0=60, y0=H-50, w=W-80, h=H-80;
+  g.clearRect(0,0,W,H); g.strokeStyle='#3A2E8A'; g.lineWidth=2; g.strokeRect(x0,y0-h,w,h);
+  g.fillStyle='#C9C4F2'; g.font='26px Barlow';
+  [0,0.5,1].forEach(v=>{ g.fillText(`${v*100}%`,6,y0-v*h+6); });
+  [0,1,2].forEach(v=>g.fillText(`${v} V`,x0+v/maxS*w-14,y0+34));
+  const cols={10:'#FF2E88',4:'#FF6B00',3:'#FFC700',2:'#00C2FF','4×2':'#00C48C'};
+  [...series,bin].forEach(s=>{ g.strokeStyle=cols[s.l]; g.lineWidth=s.l===L||s.l==='4×2'?5:2.5; g.beginPath();
+    s.ys.forEach((y,i)=>g.lineTo(x0+i/pts*w,y0-y*h)); g.stroke(); });
+  const xs=x0+sigma/maxS*w; g.strokeStyle='#fff'; g.lineWidth=2; g.setLineDash([6,6]); g.beginPath(); g.moveTo(xs,y0-h); g.lineTo(xs,y0); g.stroke(); g.setLineDash([]);
+}
+const FINDS=[
+  ['q1','Push the noise up slowly. At what setting does the 10-level channel first get a digit wrong? And the 2-level one?',(te,be)=>te>0&&be===0&&sigma>0.1],
+  ['q2','Find a noise level where the 2-level channel is perfect and the 10-level channel is useless (half its digits wrong).',(te,be)=>L===10&&be===0&&te>=8],
+  ['q3','Switch the top channel to 2 levels. Is it now as good as the bottom? What did it cost?',(te,be)=>L===2],
+  ['q4','Turn on the 20 stages at a small noise, with restoring on. Then turn restoring off.',()=>chain&&!restore]];
+function checkFinds(te,be){
+  FINDS.forEach(([id,,f])=>{ if(!seen[id]&&f(te,be)){ seen[id]=1; tell(id); } });
+  $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join('');
+}
+function tell(id){
+  const T={
+   q1:'The 10-level channel has only half a volt between neighbouring levels, so a quarter-volt jolt is enough to make it misread. The two-level channel has two and a half volts of room either side. Same wire, same noise: the difference is how close together the meanings are.',
+   q2:'Look at the curves. The 10-level line leaves zero almost at once; the two-level lines stay at exactly zero until the noise is several times larger. Binary is not immune to noise, but its breaking point is far away, and below that point it is not merely good, it is perfect. Perfect is what lets you chain it, as the next find will show.',
+   q3:'Two levels on one wire is as robust as the bottom channel, but now each digit needs four symbols in a row instead of one. Robustness was paid for with four times the time, or, in the bottom channel, four times the wires. That is the trade computers made, and it was a bargain.',
+   q4:'With restoring on, each stage snaps the signal back to the nearest level before passing it on, so the noise never gets a chance to build up, and the two-level channel is untouched after twenty stages. Without restoring, the noise from every stage adds up, and even binary fails. A logic gate is a restoring stage: its output is a clean 0 or 1 no matter how ragged its input was. That is why a signal can pass through billions of gates and come out exact.'};
+  $('#note').innerHTML=`<div class="note">${T[id]}</div>`;
+}
+$('#lv').innerHTML=[2,3,4,10].map(l=>`<button class="btn ${l===L?'on':''}" data-l="${l}">${l}</button>`).join('');
+$('#lv').onclick=e=>{ const b=e.target.closest('[data-l]'); if(!b) return; L=+b.dataset.l; $('#lv').querySelectorAll('.btn').forEach(x=>x.classList.toggle('on',x===b)); draw(); drawCurve(); };
+$('#noise').oninput=e=>{ sigma=Math.pow(+e.target.value/1000,1.6)*2.5; $('#nv').textContent=`${sigma.toFixed(2)} V`; draw(); drawCurve(); };
+function chainUI(){ $('#chain').textContent=`Pass through 20 stages: ${chain?'on':'off'}`; $('#chain').classList.toggle('on',chain); $('#restore').disabled=!chain;
+  $('#restore').textContent=restore?'Each stage restores the signal':'Each stage only amplifies it'; $('#restore').classList.toggle('on',restore);
+  $('#chainsay').textContent=chain?(restore?'Every stage adds fresh noise, then snaps to the nearest level.':'Every stage adds fresh noise and passes it all on.'):''; }
+$('#chain').onclick=()=>{ chain=!chain; chainUI(); curveCache=null; draw(); drawCurve(); };
+$('#restore').onclick=()=>{ restore=!restore; chainUI(); curveCache=null; draw(); drawCurve(); };
+// The scope shimmers: fresh noise several times a second, like a real oscilloscope.
+setInterval(()=>{ if(sigma>0) draw(); },350);
+chainUI(); draw(); drawCurve();
+</script>

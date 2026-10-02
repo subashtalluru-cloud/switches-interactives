@@ -1,0 +1,158 @@
+<meta charset="utf-8">
+<!-- Walking the Grid — Switches All the Way Down, Chapter 26 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1200px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--cyan)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.cyan{background:var(--cyan);color:#fff;border-color:var(--cyan)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:190px 1fr 90px;gap:10px;align-items:center;margin:4px 0}
+.sl input{accent-color:var(--pink)} .sl b{font-family:"JetBrains Mono",monospace;color:var(--orange);text-align:right}
+.two{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start}
+canvas{display:block;max-width:100%;background:#FAFBFE;border:1px solid var(--line);border-radius:10px}
+.lines{display:flex;flex-wrap:wrap;gap:5px}
+.ln{width:66px;border:2px solid var(--line);border-radius:7px;padding:3px 4px;font-family:"JetBrains Mono",monospace;font-size:10px;text-align:center;background:#fff;color:#aab}
+.ln.full{border-color:var(--cyan);background:#E4F0FA;color:var(--ink)}
+.ln.fill{border-color:var(--green);background:#CFF0E2}
+.ln.evict{border-color:var(--red);background:#FBDADA}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:20px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.note{background:#E4F0FA;border:1px solid #B9D8EE;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.two{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Walking the <span>grid</span></h1>
+  <p>The same grid of numbers, visited in two different orders, can take eight times longer one way than the other. Nothing about the arithmetic differs. First watch a tiny cache work cell by cell. Then slide the grid up to a realistic size and find the cliff.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <h2>1 · Watch it, one access at a time</h2>
+    <div class="bar"><span style="color:var(--soft)">Walk:</span>
+      <button class="btn on" data-o="row">row by row</button><button class="btn" data-o="col">column by column</button><button class="btn" data-o="blk">in tiles</button>
+      <span style="flex:1"></span><button class="btn cyan" id="step">Step</button><button class="btn" id="run">Run</button><button class="btn" id="fin">Finish</button><button class="btn" id="reset">Reset</button></div>
+    <div class="sl"><span>Grid size (n × n)</span><input type="range" id="gn" min="8" max="32" step="4" value="16"><b id="gnv"></b></div>
+    <div class="sl"><span>Cache size (lines)</span><input type="range" id="cl" min="2" max="32" value="8"><b id="clv"></b></div>
+    <div class="two" style="margin-top:8px">
+      <canvas id="heat" width="448" height="448" aria-label="Grid heat map"></canvas>
+      <div><h2>The cache <span style="font-weight:400;font-size:12px;color:var(--soft)">each line holds 4 neighbouring cells of one row; green = just loaded, red = just thrown out</span></h2><div class="lines" id="lines"></div>
+        <div class="read" id="tread" style="margin-top:10px"></div></div>
+    </div>
+  </section>
+  <section class="card">
+    <h2>2 · Find the cliff, at realistic sizes</h2>
+    <p style="margin:0 0 8px;color:var(--soft);font-size:14px">A 64-byte cache line holds 8 numbers of 8 bytes; a fast hit costs 1 unit, a trip to memory 100. A grid of N × N numbers; a cache that holds the number of lines shown.</p>
+    <div class="sl"><span>Grid size N (N × N)</span><input type="range" id="N" min="0" max="1000" value="500"><b id="Nv"></b></div>
+    <div class="sl"><span>Cache size</span><input type="range" id="K" min="0" max="1000" value="333"><b id="Kv"></b></div>
+    <canvas id="curve" width="1100" height="300" style="margin-top:6px;width:100%;height:auto"></canvas>
+    <div class="bar" style="font-size:13px;color:var(--soft);gap:14px;margin-top:6px"><span style="color:#0090C8">━ row by row</span><span style="color:#E5197B">━ column by column</span><span style="color:#12A66E">┅ in tiles</span><span>dotted line: your N</span></div>
+    <div class="read" id="bread" style="margin-top:8px"></div>
+  </section>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), LINE=4;
+let order='row', n=16, CL=8, seq=[], idx=0, cache=[], last=[], hits=0, misses=0, timer=null, fillAt=-1, evictAt=-1, seen={};
+function buildSeq(){
+  const s=[];
+  if(order==='row') for(let r=0;r<n;r++) for(let c=0;c<n;c++) s.push([r,c]);
+  else if(order==='col') for(let c=0;c<n;c++) for(let r=0;r<n;r++) s.push([r,c]);
+  else { const th=Math.max(1,Math.min(n,CL-1)); for(let rb=0;rb<n;rb+=th) for(let cb=0;cb<n;cb+=LINE) for(let c=cb;c<Math.min(n,cb+LINE);c++) for(let r=rb;r<Math.min(n,rb+th);r++) s.push([r,c]); }
+  return s;
+}
+function reset(){ stop(); n=+$('#gn').value; CL=+$('#cl').value; seq=buildSeq(); idx=0; cache=[]; last=Array(n*n).fill(-1); hits=misses=0; fillAt=evictAt=-1; $('#gnv').textContent=n+' × '+n; $('#clv').textContent=CL+' lines'; trender(); }
+function access(){
+  if(idx>=seq.length) return false;
+  const [r,c]=seq[idx], id=r*Math.ceil(n/LINE)+Math.floor(c/LINE); fillAt=evictAt=-1;
+  const at=cache.indexOf(id);
+  if(at>=0){ hits++; cache.splice(at,1); cache.push(id); }
+  else { misses++; if(cache.length>=CL){ evictAt=cache.shift(); } cache.push(id); fillAt=id; }
+  last[r*n+c]=idx; idx++; return true;
+}
+function trender(){
+  const cv=$('#heat'), g=cv.getContext('2d'), cs=Math.floor(448/n); cv.width=cv.height=cs*n; g.clearRect(0,0,cv.width,cv.height);
+  for(let r=0;r<n;r++)for(let c=0;c<n;c++){ const t=last[r*n+c]; if(t<0){ g.fillStyle='#fff'; } else { const age=Math.min(1,(idx-t)/Math.max(40,n*3)); g.fillStyle=`rgb(${Math.round(232-age*20)},${Math.round(98+age*125)},${Math.round(10+age*190)})`; } g.fillRect(c*cs,r*cs,cs-1,cs-1); }
+  if(idx>0){ const [r,c]=seq[idx-1]; g.strokeStyle='#1A1C2A'; g.lineWidth=3; g.strokeRect(c*cs+1,r*cs+1,cs-3,cs-3); }
+  const per=Math.ceil(n/LINE), label=id=>`r${Math.floor(id/per)} c${(id%per)*LINE}–${(id%per)*LINE+LINE-1}`;
+  $('#lines').innerHTML=[...Array(CL)].map((_,i)=>{ const id=cache[i]; return `<div class="ln ${id==null?'':'full'} ${id===fillAt?'fill':''}">${id==null?'empty':label(id)}</div>`; }).join('')+(evictAt>=0?`<div class="ln evict">out: ${label(evictAt)}</div>`:'');
+  const acc=hits+misses, used=acc*8, fetched=misses*LINE*8;
+  $('#tread').innerHTML=`<div><small>Accesses</small><b>${acc}</b><small>of ${seq.length}</small></div><div><small>Hits</small><b style="color:var(--green)">${hits}</b></div><div><small>Misses</small><b style="color:var(--red)">${misses}</b></div><div><small>Hit rate</small><b>${acc?Math.round(hits/acc*100):0}%</b></div><div><small>Bytes fetched ÷ bytes used</small><b>${acc?(fetched/used).toFixed(1)+'×':'—'}</b><small>1.0× means nothing wasted</small></div>`;
+  if(idx>=seq.length&&idx>0) toyDone();
+}
+function toyDone(){
+  const rate=hits/seq.length;
+  if(order==='col'&&n>CL&&rate<0.05) find('thrash'); if(order==='row') find('row'); if(order==='blk'&&n>CL&&rate>0.6) find('tile');
+}
+$('#step').onclick=()=>{ stop(); access(); trender(); };
+$('#run').onclick=()=>{ if(timer){ stop(); return; } $('#run').textContent='Pause'; timer=setInterval(()=>{ for(let k=0;k<(n>16?3:1);k++) if(!access()){ stop(); break; } trender(); },90); };
+function stop(){ if(timer){ clearInterval(timer); timer=null; } $('#run').textContent='Run'; }
+$('#fin').onclick=()=>{ stop(); while(access()); trender(); };
+$('#reset').onclick=reset; ['gn','cl'].forEach(id=>$('#'+id).addEventListener('input',reset));
+document.querySelector('main').addEventListener('click',e=>{ const b=e.target.closest('[data-o]'); if(b){ order=b.dataset.o; document.querySelectorAll('[data-o]').forEach(x=>x.classList.toggle('on',x===b)); reset(); } });
+
+// ---------- part 2: exact counts for a fully-associative LRU cache, by the same argument as the text ----------
+// Row by row: each 64-byte line is touched by 8 neighbouring accesses in a row, then never again: N²/8 misses.
+// Column by column: one line per row is needed for the whole column; if the cache holds at least N lines they are
+// reused by the next 7 columns (N²/8 misses), otherwise each access evicts a line before it is needed again (N² misses).
+const E=8, LB=64, HIT=1, MISS=100;
+const gridN=v=>Math.max(32,Math.round(32*Math.pow(128,v/1000)/8)*8);
+const cacheKB=v=>Math.round(8*Math.pow(1024,v/1000));
+function misses2(kind,Nn,lines){ const base=Nn*Nn/E;
+  if(kind==='row') return base;
+  if(kind==='col') return lines>=Nn?base:Nn*Nn;
+  const tile=Math.max(1,Math.min(Nn,Math.floor(lines/2))); return lines>=2?base:Nn*Nn; }
+function cost(m,Nn){ const acc=Nn*Nn; return ((acc-m)*HIT+m*MISS)/acc; }
+function bigDraw(){
+  const Nn=gridN(+$('#N').value), kb=cacheKB(+$('#K').value), lines=kb*1024/LB;
+  $('#Nv').textContent=Nn+' × '+Nn; $('#Kv').textContent=kb>=1024?(kb/1024)+' MB':kb+' KB';
+  const cv=$('#curve'), g=cv.getContext('2d'), W=cv.width, H=cv.height, x0=60, y0=H-44, w=W-90, h=H-70;
+  g.clearRect(0,0,W,H); g.strokeStyle='#E2E5EE'; g.lineWidth=1; g.strokeRect(x0,y0-h,w,h);
+  g.fillStyle='#5B6172'; g.font='14px Barlow'; [0,50,100].forEach(p=>g.fillText(p+'%',12,y0-p/100*h+5)); g.fillText('misses per access',x0,18);
+  const X=v=>x0+Math.log(v/32)/Math.log(128)*w; [32,128,512,2048].forEach(v=>g.fillText(v,X(v)-12,y0+22)); g.fillText('N (grid side) →',x0+w-110,y0+38);
+  [['row','#0090C8',3],['col','#E5197B',4],['blk','#12A66E',3]].forEach(([k,c,lw])=>{ g.strokeStyle=c; g.lineWidth=lw; g.setLineDash(k==='blk'?[8,6]:[]); g.beginPath();
+    for(let v=32;v<=4096;v+=8){ const m=misses2(k,v,lines)/(v*v); const x=X(v), y=y0-m*h-(k==='blk'?3:0); if(v===32) g.moveTo(x,y); else g.lineTo(x,y); } g.stroke(); });
+  g.setLineDash([]);
+  g.strokeStyle='#E8A400'; g.lineWidth=2; g.setLineDash([4,5]); g.beginPath(); g.moveTo(X(Nn),y0-h); g.lineTo(X(Nn),y0); g.stroke(); g.setLineDash([]);
+  if(lines>=32&&lines<=4096){ g.strokeStyle='#E23A3A'; g.setLineDash([2,4]); g.beginPath(); g.moveTo(X(lines),y0-h); g.lineTo(X(lines),y0); g.stroke(); g.setLineDash([]); g.fillStyle='#E23A3A'; g.fillText('cache holds N lines →',X(lines)-150,y0-h+16); }
+  const mr=misses2('row',Nn,lines), mc=misses2('col',Nn,lines), mb=misses2('blk',Nn,lines), acc=Nn*Nn;
+  const f=(m)=>`${(m/acc*100).toFixed(1)}%`;
+  $('#bread').innerHTML=`<div><small>Cache holds</small><b>${lines.toLocaleString()}</b><small>lines of 64 bytes</small></div>`+
+   `<div><small>Row by row</small><b style="color:#0090C8">${cost(mr,Nn).toFixed(1)}</b><small>${f(mr)} miss · time per access</small></div>`+
+   `<div><small>Column by column</small><b style="color:#E5197B">${cost(mc,Nn).toFixed(1)}</b><small>${f(mc)} miss · ${(cost(mc,Nn)/cost(mr,Nn)).toFixed(1)}× slower</small></div>`+
+   `<div><small>In tiles</small><b style="color:#12A66E">${cost(mb,Nn).toFixed(1)}</b><small>${f(mb)} miss</small></div>`+
+   `<div><small>Column order: bytes fetched ÷ used</small><b>${(mc*LB/(acc*E)).toFixed(1)}×</b></div>`;
+  if(lines>=Nn&&Nn>=64) find('fits'); if(lines<Nn&&mc/acc>0.9) find('cliff'); if(lines<Nn&&mc*LB/(acc*E)>=7.9) find('waste');
+}
+['N','K'].forEach(id=>$('#'+id).addEventListener('input',bigDraw));
+const FINDS=[
+ ['row','Walk the tiny grid row by row to the end.'],
+ ['thrash','Walk it column by column with a cache smaller than the grid. What is the hit rate?'],
+ ['tile','Now walk it in tiles. Does the same grid become fast again?'],
+ ['fits','In part 2, make the cache big enough for N lines. Do the two orders differ?'],
+ ['cliff','Grow N past the line where the cache stops holding N lines.'],
+ ['waste','Read “bytes fetched ÷ bytes used” for the column order past the cliff.']];
+const TELL={
+ row:'Row by row, every line the cache loads is used four times in a row before it is needed no more: one miss, three hits, again and again. Neighbouring cells share a line, so walking along a row gets three of every four reads for free. This is spatial locality.',
+ thrash:'Column by column, each step lands in a different row, so each access needs a different line. Before the walk comes back to the same row, the cache has had to load more lines than it holds, so the line you need was thrown out just before you need it. Every access misses: the cache is working at full effort and helping not at all.',
+ tile:'Tiling walks a small block completely before moving on, so the lines it needs stay in the cache until they have been fully used. The same grid, the same arithmetic, the same number of accesses: fast again, purely from changing the order. Matrix libraries are built this way.',
+ fits:'While the whole working set fits in the cache, order does not matter, because after the first pass every line is already there. Tiny test cases always hide this problem: it only appears when the data outgrows the cache.',
+ cliff:'The column-wise curve does not rise gradually. It sits at the same low miss rate as the row-wise walk, then jumps to 100% the moment the number of rows exceeds the number of lines the cache holds. This is the cliff: one more row and the whole behaviour changes, because LRU replacement is at its worst on a cycle one item too long for the cache.',
+ waste:'Past the cliff, each access fetches a whole 64-byte line to use 8 bytes of it, so eight times more data crosses the memory bus than the program asked for. That wasted traffic is the real cost, and it is invisible in the program’s source: both orders read exactly the same numbers.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+reset(); bigDraw(); renderQs();
+</script>

@@ -1,0 +1,121 @@
+<meta charset="utf-8">
+<!-- Translating an Address — Switches All the Way Down, Chapter 35 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--violet)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.violet{background:var(--violet);color:#fff;border-color:var(--violet)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:200px 1fr 110px;gap:10px;align-items:center;margin:5px 0}
+.sl input{accent-color:var(--pink)} .sl b{font-family:"JetBrains Mono",monospace;color:var(--sun);text-align:right}
+svg{display:block;width:100%;height:auto;background:#FAFBFE;border:1px solid var(--line);border-radius:10px}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:20px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.note{background:#EEE8FB;border:1px solid #D3C4F3;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+input[type=number]{width:80px;font:inherit;font-weight:700;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-family:"JetBrains Mono",monospace}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Translating an <span>address</span></h1>
+  <p>Every program believes it has the whole memory to itself, starting at address 0. It is a lie the hardware maintains: each program’s addresses are quietly translated to real locations, so many programs can share one memory without ever seeing each other. Watch a made-up address become a real one.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar"><span style="color:var(--soft)">Program A wants to read its address</span><input type="number" id="va" value="5000" min="0"><button class="btn violet" id="go">Translate it</button>
+      <span style="flex:1"></span><span style="color:var(--soft)">Running program:</span><button class="btn on" data-p="A">A</button><button class="btn" data-p="B">B</button></div>
+    <svg id="diag" viewBox="0 0 1140 430" aria-label="Address translation"></svg>
+    <div id="say" style="min-height:24px;margin-top:8px;font-size:15px"></div>
+  </section>
+  <div class="read" id="read"></div>
+  <section class="card">
+    <h2>When memory runs short</h2>
+    <div class="sl"><span>How much memory programs want</span><input type="range" id="demand" min="30" max="220" value="60" aria-label="Memory demand"><b id="dv"></b></div>
+    <canvas id="thrash" width="1140" height="150" style="width:100%;height:auto;background:#FAFBFE;border:1px solid var(--line);border-radius:10px"></canvas>
+    <div id="tsay" style="font-size:14px;color:var(--soft)"></div>
+  </section>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s), PAGE=4096, PHYS=16;   // 16 physical frames
+// Each program has its own page table mapping virtual pages to physical frames (or 'disk').
+const tables={ A:{0:2,1:5,2:'disk',3:9}, B:{0:5,1:1,2:3} };
+let prog='A', seen={};
+function parts(va){ return {page:Math.floor(va/PAGE), off:va%PAGE}; }
+function render(res){
+  const t=tables[prog], cx=1140; let h='<defs><marker id="ar" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#7A4FE0"/></marker></defs>';
+  // virtual address box
+  const va=+$('#va').value, {page,off}=parts(va);
+  h+=`<text x="20" y="30" font-size="15" font-weight="700">Program ${prog}’s address: ${va}</text>`;
+  h+=`<rect x="20" y="44" width="150" height="60" rx="8" fill="#EEE8FB" stroke="#7A4FE0" stroke-width="2"/><text x="30" y="70" font-size="13" fill="#5B6172">page number</text><text x="95" y="96" text-anchor="middle" font-size="26" font-weight="800" font-family="JetBrains Mono,monospace">${page}</text>`;
+  h+=`<rect x="180" y="44" width="150" height="60" rx="8" fill="#F4F5F9" stroke="#C9CDDA" stroke-width="2"/><text x="190" y="70" font-size="13" fill="#5B6172">offset in page</text><text x="255" y="96" text-anchor="middle" font-size="22" font-weight="700" font-family="JetBrains Mono,monospace">${off}</text>`;
+  h+=`<text x="20" y="128" font-size="12" fill="#5B6172">the address splits: high bits pick the page, low bits are the position inside it</text>`;
+  // page table
+  const tx=420, ty=40; h+=`<text x="${tx}" y="30" font-size="14" font-weight="700">Program ${prog}’s page table</text>`;
+  const pages=Object.keys(t).map(Number).sort((a,b)=>a-b);
+  pages.forEach((p,i)=>{ const y=ty+i*54, hit=p===page, dest=t[p];
+    h+=`<rect x="${tx}" y="${y}" width="300" height="46" rx="8" fill="${hit?'#FFF3D6':'#fff'}" stroke="${hit?'#E8A400':'#E2E5EE'}" stroke-width="${hit?3:1.5}"/>`;
+    h+=`<text x="${tx+12}" y="${y+29}" font-size="15" font-family="JetBrains Mono,monospace">page ${p} →  ${dest==='disk'?'on disk (not in memory)':'frame '+dest}</text>`; });
+  if(page in t){ const i=pages.indexOf(page), y=ty+i*54+23; h+=`<path d="M110,104 C110,${y} ${tx-30},${y} ${tx},${y}" stroke="#7A4FE0" stroke-width="2.5" fill="none" marker-end="url(#ar)"/>`; }
+  else h+=`<path d="M110,104 C110,300 ${tx},320 ${tx},300" stroke="#E23A3A" stroke-width="2.5" fill="none"/><text x="${tx-40}" y="322" fill="#E23A3A" font-weight="700">no such page!</text>`;
+  // physical memory
+  const px=800, py=40; h+=`<text x="${px}" y="30" font-size="14" font-weight="700">Real memory (16 frames)</text>`;
+  const usedBy={}; Object.entries(tables).forEach(([pg,tb])=>Object.entries(tb).forEach(([p,f])=>{ if(f!=='disk') usedBy[f]=pg; }));
+  for(let f=0;f<PHYS;f++){ const y=py+f*22, dest=t[page], hit=dest===f;
+    h+=`<rect x="${px}" y="${y}" width="280" height="19" rx="4" fill="${hit?'#12A66E':usedBy[f]?(usedBy[f]==='A'?'#EEE8FB':'#E4F0FA'):'#fff'}" stroke="${hit?'#0d7a52':'#E2E5EE'}" stroke-width="1.5"/>`;
+    h+=`<text x="${px+8}" y="${y+14}" font-size="12" font-family="JetBrains Mono,monospace" fill="${hit?'#fff':'#1A1C2A'}">frame ${f}${usedBy[f]?'  · program '+usedBy[f]:'  · free'}${hit?'  ← here':''}</text>`; }
+  $('#diag').innerHTML=h;
+  // readout
+  const dest=t[page];
+  if(dest===undefined){ $('#say').innerHTML=`<b style="color:var(--red)">Segmentation fault.</b> Program ${prog} has no page ${page}: this address was never given to it. The hardware refuses, and the operating system usually kills the program. This is the wall that stops one program reading another’s memory.`; find('fault'); }
+  else if(dest==='disk'){ $('#say').innerHTML=`<b style="color:var(--orange)">Page fault.</b> Page ${page} exists but was moved out to disk to make room. The processor pauses the program, the OS fetches the page back into a free frame, updates the table, and the program resumes — thousands of times slower than a normal read, but invisible to the program itself.`; find('pagefault'); }
+  else { const phys=dest*PAGE+off; $('#say').innerHTML=`Real address = frame ${dest} × ${PAGE} + offset ${off} = <b>${phys.toLocaleString()}</b>. The program never learns this number; it only ever sees ${va}.`; find('hit'); }
+  $('#read').innerHTML=`<div><small>Virtual address</small><b>${va.toLocaleString()}</b><small>what the program uses</small></div><div><small>Page / offset</small><b>${page} / ${off}</b></div><div><small>Maps to</small><b>${dest===undefined?'—':dest==='disk'?'disk':'frame '+dest}</b></div><div><small>Real address</small><b>${(dest!==undefined&&dest!=='disk')?(dest*PAGE+off).toLocaleString():'—'}</b></div>`;
+  renderQs();
+}
+document.querySelector('main').addEventListener('click',e=>{ const b=e.target.closest('[data-p]'); if(b){ prog=b.dataset.p; document.querySelectorAll('[data-p]').forEach(x=>x.classList.toggle('on',x===b)); render(); } });
+$('#go').onclick=render; $('#va').addEventListener('input',render);
+// thrashing curve
+function drawThrash(){
+  const demand=+$('#demand').value, cv=$('#thrash'), g=cv.getContext('2d'), W=cv.width, H=cv.height, x0=40, w=W-60, y0=H-30, h=H-50;
+  g.clearRect(0,0,W,H); g.strokeStyle='#E2E5EE'; g.strokeRect(x0,y0-h,w,h);
+  // throughput: flat while demand < 100% of memory, then collapses (thrashing)
+  const tp=d=>d<=100?1:Math.max(0.02,Math.exp(-(d-100)/22));
+  g.strokeStyle='#7A4FE0'; g.lineWidth=4; g.beginPath(); for(let d=30;d<=220;d++) g.lineTo(x0+(d-30)/190*w,y0-tp(d)*h); g.stroke();
+  const x=x0+(demand-30)/190*w; g.strokeStyle='#E8A400'; g.setLineDash([6,6]); g.beginPath(); g.moveTo(x,y0-h); g.lineTo(x,y0); g.stroke(); g.setLineDash([]);
+  g.fillStyle='#E23A3A'; const xc=x0+(100-30)/190*w; g.beginPath(); g.moveTo(xc,y0-h); g.lineTo(xc,y0); g.stroke();
+  g.fillStyle='#5B6172'; g.font='13px Barlow'; g.fillText('physical memory full →',xc+4,y0-h+16); g.fillText('memory demanded (% of what fits) →',x0,y0+24); g.save(); g.translate(14,y0-h/2); g.rotate(-Math.PI/2); g.fillText('useful work',0,0); g.restore();
+  const t=tp(demand);
+  $('#dv').textContent=demand+'%';
+  $('#tsay').innerHTML=demand<=100?'Every program’s working pages fit in memory. Paging is invisible and the machine runs at full speed.':`Demand is ${demand}% of memory. Programs’ pages no longer all fit, so the OS keeps evicting a page one program needs and reloading it moments later. Useful work has collapsed to <b>${Math.round(t*100)}%</b> — the machine spends its time shuffling pages to and from disk. This is <b>thrashing</b>: not a gentle slowdown but a cliff, and it is why a computer with too little memory freezes rather than merely slowing.`;
+  if(demand>140) find('thrash');
+}
+$('#demand').oninput=drawThrash;
+const FINDS=[
+ ['hit','Translate an address that lands in memory.'],
+ ['fault','Translate an address in a page the program does not have (try 200000).'],
+ ['pagefault','Find a page that has been moved to disk.'],
+ ['thrash','Push memory demand well past 100%.']];
+const TELL={
+ hit:'The page number chooses a frame from the table; the offset is copied through unchanged, because it is just the position inside a page and pages and frames are the same size. Program A’s page 0 and program B’s page 0 point at different frames, so both can use “address 0” and never collide. One indirection buys every program its own private world.',
+ fault:'An address in a page the program was never given has no table entry, so translation fails and the hardware raises a fault. The program cannot even name another program’s memory, let alone read it: isolation is enforced by the fact that its addresses simply do not reach there. Switch to program B and watch its identical page numbers land on different frames.',
+ pagefault:'A page marked “on disk” is not an error — it is memory the OS parked on disk to free a frame. Touching it triggers a page fault: the program freezes, the OS reads the page back, fixes the table, and the program continues none the wiser. This is how a machine runs programs that need more memory than it physically has.',
+ thrash:'Past 100%, throughput does not decline gently; it falls off a cliff. Every program keeps touching pages that were just evicted, so the OS thrashes: reading and writing disk constantly and computing almost nothing. A machine one page short of its working set can be a thousand times slower than one with enough. Memory is the one resource where a little too little is catastrophic.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+render(); drawThrash();
+</script>

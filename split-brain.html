@@ -1,0 +1,126 @@
+<meta charset="utf-8">
+<!-- Split Brain — Switches All the Way Down, Chapter 43 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--red)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.red{background:var(--red);color:#fff;border-color:var(--red)}.btn.green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.stage{display:grid;grid-template-columns:1fr 100px 1fr;gap:12px;align-items:stretch}
+.replica{border-radius:12px;padding:14px;border:2px solid}
+.replica.a{border-color:var(--cyan)} .replica.b{border-color:var(--violet)}
+.bal{font-family:"JetBrains Mono",monospace;font-size:44px;font-weight:800;text-align:center;margin:8px 0}
+.link{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.wire{width:6px;flex:1;background:var(--green);border-radius:3px;min-height:60px}
+.wire.cut{background:repeating-linear-gradient(0deg,var(--red),var(--red) 8px,transparent 8px,transparent 16px)}
+.replica .bar input{width:80px}
+.hist{font-family:"JetBrains Mono",monospace;font-size:12px;max-height:120px;overflow:auto;background:var(--bg);border-radius:8px;padding:6px 8px;margin-top:8px}
+.note{background:#FDEBEB;border:1px solid #F3C0C0;border-radius:8px;padding:10px 12px;font-size:14px}
+.good{background:#E4F6EE;border:1px solid #B7E4CE;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.stage{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Split <span>brain</span></h1>
+  <p>Your bank balance is stored on two servers that copy every change to each other, so if one dies the other carries on. But what happens the moment the wire between them is cut, and a customer withdraws money on each side at once? You cannot have it both ways — and this is the deepest trade-off in distributed systems.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar"><span style="color:var(--soft)">When the link is down, each replica should:</span>
+      <button class="btn on" data-m="AP">Stay available (accept writes)</button>
+      <button class="btn" data-m="CP">Stay consistent (refuse if unsure)</button></div>
+  </section>
+  <div class="stage">
+    <div class="replica a">
+      <h2 style="color:var(--cyan)">Replica A (London)</h2>
+      <div style="color:var(--soft);font-size:13px">balance</div>
+      <div class="bal" id="balA">£100</div>
+      <div class="bar"><button class="btn" data-op="A:-30">Withdraw £30</button><button class="btn" data-op="A:-60">Withdraw £60</button></div>
+      <div class="hist" id="histA"></div>
+    </div>
+    <div class="link">
+      <div class="wire" id="wire"></div>
+      <button class="btn red" id="cut">✂ Cut the link</button>
+      <span style="font-size:12px;color:var(--soft);text-align:center" id="linkstate">connected</span>
+    </div>
+    <div class="replica b">
+      <h2 style="color:var(--violet)">Replica B (Tokyo)</h2>
+      <div style="color:var(--soft);font-size:13px">balance</div>
+      <div class="bal" id="balB">£100</div>
+      <div class="bar"><button class="btn" data-op="B:-30">Withdraw £30</button><button class="btn" data-op="B:-60">Withdraw £60</button></div>
+      <div class="hist" id="histB"></div>
+    </div>
+  </div>
+  <div id="verdict" style="min-height:26px"></div>
+  <div class="bar"><button class="btn green" id="heal" disabled>Reconnect the link &amp; reconcile</button><button class="btn" id="reset">Reset</button></div>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+let mode='AP', linked=true, bal={A:100,B:100}, hist={A:[],B:[]}, pending={A:[],B:[]}, seen={};
+function reset(){ linked=true; bal={A:100,B:100}; hist={A:[],B:[]}; pending={A:[],B:[]}; $('#verdict').innerHTML=''; render(); }
+function op(side,amt){
+  if(linked){ // both replicas update together
+    bal.A+=amt; bal.B+=amt; log('A',`${amt} (synced) → £${bal.A}`); log('B',`${amt} (synced) → £${bal.B}`); render(); return;
+  }
+  // link is down
+  if(mode==='CP'){ log(side,`refused: cannot reach the other side`); $('#verdict').innerHTML='<div class="good">Refused. With the link down, a “consistent” replica will not act alone, because it cannot be sure the money is still there. The customer is turned away — safe, but the bank is closed on this side until the link returns.</div>'; find('cp'); render(); return; }
+  // AP: accept locally, remember to sync later
+  bal[side]+=amt; pending[side].push(amt); log(side,`${amt} (local only) → £${bal[side]}`);
+  $('#verdict').innerHTML='<div class="note">Accepted locally. The two replicas now disagree — this is <b>split brain</b>. Each thinks it knows the balance; neither has seen the other’s withdrawal.</div>';
+  if(pending.A.length&&pending.B.length) find('ap'); render();
+}
+function heal(){
+  if(mode==='CP'){ linked=true; log('A','link restored'); log('B','link restored'); $('#verdict').innerHTML='<div class="good">Reconnected. Because neither side acted alone, both balances still agree. Nothing to reconcile.</div>'; render(); return; }
+  // AP reconcile: apply each side's pending ops to the other. Both withdrawals now count.
+  const start=100, all=[...pending.A,...pending.B]; const merged=start+all.reduce((s,x)=>s+x,0);
+  const overdrawn=merged<0;
+  bal.A=bal.B=merged; linked=true;
+  log('A',`reconciled → £${merged}`); log('B',`reconciled → £${merged}`);
+  $('#verdict').innerHTML=`<div class="${overdrawn?'note':'good'}">Reconnected and reconciled: both withdrawals are applied, so the balance is now <b>£${merged}</b>.${overdrawn?' <b>It went negative.</b> Both sides let a customer take money that, between them, was not there. The bank stayed open through the outage — and paid for it with an overdrawn account it must now chase.':' This time the total was still covered, so no harm done — but the bank was gambling that it would be.'}</div>`;
+  pending={A:[],B:[]}; if(overdrawn) find('overdraw'); render();
+}
+function log(side,msg){ hist[side].unshift(msg); }
+function render(){
+  $('#balA').textContent='£'+bal.A; $('#balB').textContent='£'+bal.B;
+  $('#balA').style.color=bal.A<0?'var(--red)':'var(--ink)'; $('#balB').style.color=bal.B<0?'var(--red)':'var(--ink)';
+  if(bal.A!==bal.B){ $('#balA').style.color='var(--orange)'; $('#balB').style.color='var(--orange)'; }
+  $('#wire').className='wire'+(linked?'':' cut'); $('#linkstate').textContent=linked?'connected':'LINK DOWN';
+  $('#cut').disabled=!linked; $('#heal').disabled=linked;
+  document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
+  $('#histA').innerHTML=hist.A.map(h=>`<div>${h}</div>`).join(''); $('#histB').innerHTML=hist.B.map(h=>`<div>${h}</div>`).join('');
+  renderQs();
+}
+document.querySelector('main').addEventListener('click',e=>{
+  const m=e.target.closest('[data-m]'), o=e.target.closest('[data-op]');
+  if(m){ mode=m.dataset.m; render(); }
+  if(o){ const [side,amt]=o.dataset.op.split(':'); op(side,+amt); }
+});
+$('#cut').onclick=()=>{ linked=false; log('A','link lost'); log('B','link lost'); $('#verdict').innerHTML='<div class="note">The link is cut. Each replica is now alone and cannot tell whether the other is dead or just unreachable. Try a withdrawal on each side.</div>'; find('cut'); render(); };
+$('#heal').onclick=heal; $('#reset').onclick=reset;
+const FINDS=[
+ ['cut','Cut the link between the two replicas.'],
+ ['ap','In “stay available” mode, withdraw money on both sides while the link is down.'],
+ ['overdraw','Reconcile after over-withdrawing on both sides.'],
+ ['cp','Switch to “stay consistent” and try to withdraw while the link is down.']];
+const TELL={
+ cut:'A cut link is indistinguishable from a dead partner: a replica hears silence either way. It must now choose, with no way to check, between acting alone and refusing to act. Every distributed system faces this the instant a network splits, and networks always eventually split.',
+ ap:'Both sides said yes, and now they disagree about the balance — a split brain. Choosing to stay available means choosing to risk exactly this: two truths where there should be one. The system kept working; correctness is what it gave up.',
+ overdraw:'When the two histories merge, both withdrawals are real, and together they took more than existed. The account is overdrawn. This is the price of “always available”: the outage is invisible to customers, but the bank must clean up conflicts afterwards — which is why shopping carts and social posts choose availability, but bank ledgers usually do not.',
+ cp:'Refusing to act keeps the two balances identical forever: they can never disagree if neither moves without the other. That is consistency, bought by becoming unavailable during the split — the customer is turned away rather than risked. This is the CAP theorem in one screen: when the network partitions (P), you must give up either availability (A) or consistency (C). You cannot keep both, ever, and no cleverness escapes it.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+reset();
+</script>

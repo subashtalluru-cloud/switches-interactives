@@ -1,0 +1,153 @@
+<meta charset="utf-8">
+<!-- E8 · The Byte Inspector and the Mojibake Machine — Switches All the Way Down, Chapter 9 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+Telugu:wght@400;700&family=Noto+Sans+Devanagari:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2;--red:#FF3B3B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,"Noto Sans Telugu","Noto Sans Devanagari",system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1200px;margin:0 auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--pink)}
+header p{margin:4px 0 0;color:var(--soft);max-width:78ch}
+h2{font-size:18px;margin:0 0 8px;font-weight:800}
+.panel{background:var(--night2);border-radius:12px;padding:16px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:none;border-radius:6px;padding:7px 12px;cursor:pointer;background:var(--night3);color:#fff}
+.btn.pink{background:var(--pink)}.btn.cyan{background:var(--cyan);color:var(--ink)}.btn.sun{background:var(--sun);color:var(--ink)}.btn.green{background:var(--green);color:var(--ink)}
+.btn:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+textarea{width:100%;font:inherit;font-size:26px;border:none;border-radius:8px;padding:10px 12px;background:#fff;color:var(--ink);resize:vertical;min-height:64px}
+.lens{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.lens div{background:var(--night3);border-radius:8px;padding:8px 10px}
+.lens b{display:block;font-size:28px;font-family:"JetBrains Mono",monospace;color:var(--sun)}
+.lens small{color:var(--soft);font-size:12px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}
+.lab{width:110px;flex:none;color:var(--soft);font-size:13px;font-weight:700;padding-top:8px}
+.g{border-radius:8px;padding:4px 10px;font-size:30px;cursor:pointer;background:var(--night3);min-width:44px;text-align:center}
+.cp{border-radius:6px;padding:4px 7px;font-family:"JetBrains Mono",monospace;font-size:13px;cursor:pointer;background:var(--night3);text-align:center}
+.cp span{display:block;font-family:Barlow,"Noto Sans Telugu","Noto Sans Devanagari";font-size:20px}
+.by{border-radius:5px;padding:4px 6px;font-family:"JetBrains Mono",monospace;font-size:13px;cursor:pointer;background:var(--night3)}
+.hl{outline:3px solid var(--sun)}
+.bits{font-family:"JetBrains Mono",monospace;font-size:26px;letter-spacing:2px;display:flex;flex-wrap:wrap;gap:14px}
+.bits .pre{color:#8A83B8}
+.moj{font-size:26px;background:#fff;color:var(--ink);border-radius:8px;padding:10px 12px;word-break:break-all;min-height:56px}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--night3);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+.two{display:grid;grid-template-columns:1fr 340px;gap:14px;align-items:start}
+input[type=range]{width:100%;accent-color:var(--pink)}
+@media (max-width:950px){.two{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>What is a <span>character</span>, really?</h1>
+  <p>Type anything, in any script. Below it, the same text at three depths: the characters you see, the numbers Unicode gives them, and the bytes that are actually stored. They do not line up one to one, and every garbled email you have ever received comes from that gap.</p>
+</header>
+<div class="two">
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="panel">
+    <textarea id="txt" rows="1" aria-label="Text to inspect">café</textarea>
+    <div class="bar" style="margin-top:8px" id="samples"></div>
+  </section>
+  <section class="panel">
+    <h2>How long is it?</h2>
+    <div class="lens" id="lens"></div>
+  </section>
+  <section class="panel">
+    <h2>Three depths <span style="font-weight:400;font-size:13px;color:var(--soft)">(point at anything to see what it is made of)</span></h2>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="row"><div class="lab">What you see</div><div class="row" id="gs"></div></div>
+      <div class="row"><div class="lab">Unicode numbers</div><div class="row" id="cps"></div></div>
+      <div class="row"><div class="lab">Bytes (UTF-8)</div><div class="row" id="bys"></div></div>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Decode one character by hand</h2>
+    <div id="dec" style="min-height:90px"></div>
+  </section>
+  <section class="panel">
+    <h2>Cut it short</h2>
+    <p style="margin:0 0 6px;color:var(--soft)">A database field holds a fixed number of bytes. Slide to chop the text after that many bytes.</p>
+    <input type="range" id="cut" min="0" max="10" value="10" aria-label="Bytes kept">
+    <div class="moj" id="cutout" style="margin-top:8px"></div>
+  </section>
+  <section class="panel">
+    <h2>The mojibake machine</h2>
+    <p style="margin:0 0 8px;color:var(--soft)">Your text is sent as UTF-8 bytes, but the receiving program assumes an old Western encoding (Windows-1252), shows the result, and saves it again as UTF-8. Then someone forwards it.</p>
+    <div class="bar"><button class="btn pink" id="send">Send it through the wrong program</button><button class="btn" id="unsend">Start again</button><span id="round" style="color:var(--soft)"></span></div>
+    <div class="moj" id="moj" style="margin-top:8px"></div>
+  </section>
+</main>
+<aside class="panel" style="position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+</div>
+<script>
+const $=s=>document.querySelector(s), enc=new TextEncoder(), u8=new TextDecoder('utf-8'), w1252=new TextDecoder('windows-1252');
+const SAMPLES=[['café','café'],['Hello','Hello'],['Telugu','తెలుగు'],['Hindi','नमस्ते'],['Japanese','日本語'],['Thumbs up','👍🏽'],['Family','👨‍👩‍👧'],['Flag','🇮🇳']];
+const COLORS=['#FF2E88','#00C2FF','#FFC700','#00C48C','#FF6B00','#B388FF','#FF8FB8','#7CF2FF'];
+let hl=null, moj=null, rounds=0, seen={}, maxBytes=0;
+$('#samples').innerHTML=SAMPLES.map(([n,t])=>`<button class="btn" data-s="${t}">${n}</button>`).join('');
+$('#samples').onclick=e=>{ const b=e.target.closest('[data-s]'); if(b){ $('#txt').value=b.dataset.s; moj=null; rounds=0; render(); } };
+const seg=typeof Intl!=='undefined'&&Intl.Segmenter?new Intl.Segmenter(undefined,{granularity:'grapheme'}):null;
+function analyse(t){
+  const graphemes=seg?[...seg.segment(t)].map(s=>s.segment):[...t];
+  const out=[]; let gi=0, bi=0;
+  graphemes.forEach((g,gi)=>{ const cps=[...g].map(ch=>{ const bytes=[...enc.encode(ch)], o={ch,cp:ch.codePointAt(0),bytes,b0:bi}; bi+=bytes.length; return o; }); out.push({g,cps}); });
+  return out;
+}
+const hex=(n,w=2)=>n.toString(16).toUpperCase().padStart(w,'0');
+const vis=ch=>{ const c=ch.codePointAt(0); return c===0x200D?'ZWJ':c>=0x1F3FB&&c<=0x1F3FF?'tone':(c>=0x0300&&c<=0x036F)||(c>=0x0C3E&&c<=0x0C56)||(c>=0x093E&&c<=0x094D)||c===0x0C4D?'◌'+ch:c===0x20?'␣':ch; };
+function render(){
+  const t=$('#txt').value, A=analyse(t), bytes=[...enc.encode(t)];
+  $('#lens').innerHTML=`<div><small>Characters you see</small><b>${A.length}</b></div><div><small>Unicode code points</small><b>${[...t].length}</b></div><div><small>What JavaScript’s .length says</small><b>${t.length}</b><small>(UTF-16 units)</small></div><div><small>Bytes stored (UTF-8)</small><b>${bytes.length}</b></div>`;
+  let gH='',cH='',bH='', ci=0;
+  A.forEach((g,gi)=>{
+    const col=COLORS[gi%COLORS.length], on=hl&&hl.g===gi;
+    gH+=`<div class="g ${on?'hl':''}" data-g="${gi}" style="border-bottom:5px solid ${col}">${g.g===' '?'␣':g.g}</div>`;
+    g.cps.forEach((c,k)=>{ const onc=on&&(hl.c==null||hl.c===k);
+      cH+=`<div class="cp ${onc?'hl':''}" data-g="${gi}" data-c="${k}" style="border-bottom:5px solid ${col}"><span>${vis(c.ch)}</span>U+${hex(c.cp,4)}</div>`;
+      c.bytes.forEach(b=>{ bH+=`<div class="by ${onc?'hl':''}" data-g="${gi}" data-c="${k}" style="border-bottom:5px solid ${col}">${hex(b)}</div>`; }); });
+  });
+  $('#gs').innerHTML=gH; $('#cps').innerHTML=cH; $('#bys').innerHTML=bH;
+  renderDec(A);
+  const cut=$('#cut'); cut.max=bytes.length; if(+cut.value>bytes.length||!cut.dataset.touched) cut.value=bytes.length;
+  const kept=bytes.slice(0,+cut.value), shown=u8.decode(new Uint8Array(kept));
+  $('#cutout').innerHTML=`${shown.replace(/\uFFFD/g,'<span style="background:#FF3B3B;color:#fff;border-radius:4px;padding:0 4px">�</span>')||'&nbsp;'}<div style="font-size:13px;color:#666;margin-top:4px">${kept.length} of ${bytes.length} bytes kept${shown.includes('\uFFFD')?': the cut landed inside a character, and its remaining bytes make no sense on their own':''}</div>`;
+  if(shown.includes('\uFFFD')) find('cut');
+  $('#moj').textContent=moj==null?t:moj; $('#round').textContent=rounds?`after ${rounds} trip${rounds>1?'s':''}: ${[...enc.encode(moj)].length} bytes`:'';
+  A.forEach(g=>g.cps.forEach(c=>{ if(c.bytes.length>maxBytes) maxBytes=c.bytes.length; seen['b'+c.bytes.length]=1; }));
+  if([1,2,3,4].every(n=>seen['b'+n])) find('lens14');
+  if(A.some(g=>g.cps.length>1)) find('cluster');
+  if(t.length!==[...t].length) find('js');
+  renderQs();
+}
+function renderDec(A){
+  const pick=hl?A[hl.g]&&A[hl.g].cps[hl.c??0]:A[0]&&A[0].cps[A[0].cps.length>1?0:0];
+  if(!pick){ $('#dec').innerHTML=''; return; }
+  const n=pick.bytes.length, parts=pick.bytes.map((b,i)=>{ const s=b.toString(2).padStart(8,'0'), pre=i===0?(n===1?1:n+1):2; return {pre:s.slice(0,pre),pay:s.slice(pre)}; });
+  const payload=parts.map(p=>p.pay).join('');
+  $('#dec').innerHTML=`<div class="bits">${parts.map((p,i)=>`<span><span class="pre">${p.pre}</span><span style="color:${COLORS[i]}">${p.pay}</span></span>`).join('')}</div>
+   <p style="margin:8px 0 0;font-size:14px">${n===1?'A byte starting with <b>0</b> is a whole character on its own: the 128 characters of old ASCII, unchanged. That is why UTF-8 text in English looks exactly like 1970s text.'
+    :`The first byte starts with <b>${'1'.repeat(n)}0</b>: “this character is ${n} bytes long”. Every following byte starts with <b>10</b>: “I am a continuation”. Join the coloured bits: <span style="font-family:JetBrains Mono,monospace">${payload}</span> = ${parseInt(payload,2)} = U+${hex(parseInt(payload,2),4)} = “${pick.ch}”.`} Point at any byte above to decode it.</p>`;
+}
+function hover(e){ const el=e.target.closest('[data-g]'); if(!el) return; const nh={g:+el.dataset.g,c:el.dataset.c!=null?+el.dataset.c:null}; if(!hl||hl.g!==nh.g||hl.c!==nh.c){ hl=nh; render(); } }
+['#gs','#cps','#bys'].forEach(id=>{ $(id).addEventListener('pointerover',hover); $(id).addEventListener('click',hover); });
+$('#txt').addEventListener('input',()=>{ hl=null; moj=null; rounds=0; render(); });
+$('#cut').addEventListener('input',e=>{ e.target.dataset.touched=1; render(); });
+// Each trip: the bytes are UTF-8, read as Windows-1252, and the (wrong) result saved again as UTF-8.
+$('#send').onclick=()=>{ const cur=moj==null?$('#txt').value:moj; moj=w1252.decode(enc.encode(cur)); rounds++; render(); if(rounds>=3&&moj!==$('#txt').value) find('moj'); };
+$('#unsend').onclick=()=>{ moj=null; rounds=0; render(); };
+const FINDS=[
+ ['lens14','Find characters that take 1, 2, 3 and 4 bytes. (Try the samples.)'],
+ ['cluster','Find something you see as one character that is really several Unicode numbers.'],
+ ['js','Find text where JavaScript’s .length disagrees with the number of code points.'],
+ ['cut','Cut some text so the last character breaks.'],
+ ['moj','Send non-English text through the wrong program three times.']];
+const TELL={
+ lens14:'Four lengths from one scheme. UTF-8 spends one byte on the characters English needs, and up to four on everything else. It was a deliberate choice: nothing old broke, and nothing new was left out.',
+ cluster:'Telugu “తె” is two code points, a consonant plus a vowel sign, drawn as one shape. A thumbs up with a skin tone is two; the family emoji is five, glued together with invisible “zero-width joiners”. “Character” turns out to mean at least three different things, and software has to pick one.',
+ js:'JavaScript, Java and Windows store text in 16-bit units. Anything beyond the first 65,536 code points, like most emoji, takes two units, so .length counts it twice. Code that assumes one unit per character splits emoji in half.',
+ cut:'Cutting by bytes can land in the middle of a character, leaving a first byte that promises continuation bytes that never arrive. The decoder shows the replacement mark �. Fixed-size database fields and message limits cause this constantly.',
+ moj:'Each trip reads multi-byte characters as several single-byte Western characters, then saves those as UTF-8 again, which makes them multi-byte too. The damage compounds: this is how “café” becomes “cafÃ©” and then “cafÃƒÂ©”. The bytes were never lost; they were misread, then the misreading was written down as if it were the truth.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+render();
+</script>

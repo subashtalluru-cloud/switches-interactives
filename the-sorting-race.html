@@ -1,0 +1,146 @@
+<meta charset="utf-8">
+<!-- The Sorting Race — Switches All the Way Down, Chapter 31 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1200px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--green)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:170px 1fr 110px;gap:10px;align-items:center}
+.sl input{accent-color:var(--pink)} .sl b{font-family:"JetBrains Mono",monospace;color:var(--orange);text-align:right}
+.bars{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.pan{border:1px solid var(--line);border-radius:10px;padding:8px;background:#FAFBFE}
+.pan canvas{display:block;width:100%;height:auto}
+.pan h3{margin:0 0 4px;font-size:14px;display:flex;justify-content:space-between}
+canvas#plot{display:block;width:100%;height:auto;background:#FAFBFE;border:1px solid var(--line);border-radius:10px}
+.read{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px;border-top:4px solid}
+.read b{display:block;font-size:18px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.note{background:#E4F6EE;border:1px solid #B7E4CE;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.bars,.read{grid-template-columns:1fr 1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>The sorting <span>race</span></h1>
+  <p>Four ways to put a list in order, all correct, all very different once the list gets long. Watch them rearrange the same 40 bars. Then slide the list size up and see what each method really costs, counted in comparisons and moves.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <div class="bar"><span style="color:var(--soft)">The list is:</span>
+      <button class="btn on" data-a="random">random</button><button class="btn" data-a="sorted">already sorted</button><button class="btn" data-a="reverse">in reverse</button><button class="btn" data-a="mostly">mostly sorted</button>
+      <span style="flex:1"></span><button class="btn green" id="race">Race the 40 bars</button></div>
+    <div class="bars" style="margin-top:10px" id="bars"></div>
+  </section>
+  <section class="card">
+    <h2>What each method costs</h2>
+    <div class="sl"><span>List length n</span><input type="range" id="n" min="0" max="1000" value="400" aria-label="List length"><b id="nv"></b></div>
+    <div class="bar" style="margin:6px 0"><button class="btn" id="log">Axes: linear</button><span style="color:var(--soft);font-size:13px">Sizes up to 3,000 are counted by really running the method; larger sizes are extended from those measurements and drawn dashed.</span></div>
+    <canvas id="plot" width="1100" height="360"></canvas>
+    <div class="read" id="read" style="margin-top:8px"></div>
+  </section>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const METHODS=[['selection','Selection','#0090C8'],['insertion','Insertion','#E5197B'],['merge','Merge','#12A66E'],['quick','Quick (first item as pivot)','#E8620A']];
+const MEASURED=[10,20,50,100,200,500,1000,2000,3000], SIZES=[...MEASURED,5000,10000,20000,50000,100000];
+let arr='random', logAxes=false, cache={}, seen={}, raceTimer=null;
+function prng(seed){ return ()=>{ seed=(seed*1664525+1013904223)%4294967296; return seed/4294967296; }; }
+function make(kind,n){ const r=prng(12345+n), a=[...Array(n)].map((_,i)=>i);
+  if(kind==='random'||kind==='mostly'){ if(kind==='random'){ for(let i=n-1;i>0;i--){ const j=Math.floor(r()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } } else { const sw=Math.max(1,Math.floor(n*0.05)); for(let k=0;k<sw;k++){ const i=Math.floor(r()*n), j=Math.floor(r()*n); [a[i],a[j]]=[a[j],a[i]]; } } }
+  if(kind==='reverse') a.reverse(); return a; }
+// ----- instrumented sorts: ops = comparisons + moves -----
+const SORT={
+ insertion(a){ let c=0; for(let i=1;i<a.length;i++){ const key=a[i]; let j=i-1; while(j>=0){ c++; if(a[j]>key){ a[j+1]=a[j]; c++; j--; } else break; } a[j+1]=key; c++; } return c; },
+ selection(a){ let c=0; const n=a.length; for(let i=0;i<n-1;i++){ let m=i; for(let j=i+1;j<n;j++){ c++; if(a[j]<a[m]) m=j; } if(m!==i){ const t=a[i]; a[i]=a[m]; a[m]=t; c+=2; } } return c; },
+ merge(a){ let c=0; const n=a.length, b=new Array(n); for(let w=1;w<n;w*=2){ for(let lo=0;lo<n;lo+=2*w){ const mid=Math.min(lo+w,n), hi=Math.min(lo+2*w,n); let i=lo,j=mid,k=lo; while(i<mid&&j<hi){ c+=2; if(a[i]<=a[j]) b[k++]=a[i++]; else b[k++]=a[j++]; } while(i<mid){ b[k++]=a[i++]; c++; } while(j<hi){ b[k++]=a[j++]; c++; } } for(let t=0;t<n;t++) a[t]=b[t]; c+=n; } return c; },
+ quick(a){ let c=0; const st=[[0,a.length-1]]; while(st.length){ const [lo,hi]=st.pop(); if(lo>=hi) continue; const p=a[lo]; let i=lo; for(let j=lo+1;j<=hi;j++){ c++; if(a[j]<p){ i++; const t=a[i]; a[i]=a[j]; a[j]=t; c+=2; } } const t=a[lo]; a[lo]=a[i]; a[i]=t; c+=2; st.push([lo,i-1],[i+1,hi]); } return c; }};
+function measure(kind){
+  if(cache[kind]) return cache[kind];
+  const out={}; METHODS.forEach(([m])=>out[m]=MEASURED.map(n=>SORT[m](make(kind,n))));
+  // Extend beyond 3,000: pick the growth class from the measured 1,000 → 3,000 slope, then scale by that class.
+  METHODS.forEach(([m])=>{ const o=out[m], a1=o[MEASURED.indexOf(1000)], a3=o[MEASURED.indexOf(3000)], slope=Math.log(a3/a1)/Math.log(3);
+    const f=slope>1.55?(n=>n*n):slope<1.04?(n=>n):(n=>n*Math.log2(n));
+    SIZES.slice(MEASURED.length).forEach(n=>o.push(a3*f(n)/f(3000))); });
+  return cache[kind]=out;
+}
+const NMAP=v=>Math.round(10*Math.pow(10000,v/1000));
+function opsAt(m,n,data){ // interpolate in log space between known sizes (these are all measured or class-extended points)
+  if(n<=SIZES[0]) return data[m][0]; for(let i=1;i<SIZES.length;i++){ if(n<=SIZES[i]){ const x0=Math.log(SIZES[i-1]),x1=Math.log(SIZES[i]),y0=Math.log(data[m][i-1]),y1=Math.log(data[m][i]); return Math.exp(y0+(y1-y0)*(Math.log(n)-x0)/(x1-x0)); } } return data[m][SIZES.length-1]; }
+function plot(){
+  const n=NMAP(+$('#n').value), data=measure(arr), cv=$('#plot'), g=cv.getContext('2d'), W=cv.width, H=cv.height, x0=80, y0=H-44, w=W-110, h=H-60;
+  $('#nv').textContent=n.toLocaleString(); g.clearRect(0,0,W,H);
+  const shown=SIZES.filter(s=>s<=n), pts=shown.concat(n===shown[shown.length-1]?[]:[n]);
+  const maxY=Math.max(...METHODS.map(([m])=>opsAt(m,n,data)));
+  const X=v=>logAxes?x0+Math.log(v/10)/Math.log(10000)*w:x0+v/n*w, Y=v=>logAxes?y0-Math.log(Math.max(v,1)/10)/Math.log(1e10/10)*h:y0-v/maxY*h;
+  g.strokeStyle='#E2E5EE'; g.lineWidth=1; g.strokeRect(x0,y0-h,w,h); g.fillStyle='#5B6172'; g.font='13px Barlow';
+  if(logAxes){ [10,100,1000,10000,100000].forEach(v=>g.fillText(v.toLocaleString(),X(v)-14,y0+18)); [1e2,1e4,1e6,1e8,1e10].forEach(v=>g.fillText(v.toExponential(0),8,Y(v)+4)); }
+  else { for(let k=0;k<=4;k++){ g.fillText(Math.round(n*k/4).toLocaleString(),x0+w*k/4-14,y0+18); g.fillText(fmtOps(maxY*k/4),8,y0-h*k/4+4); } }
+  g.fillText('operations (comparisons + moves)',x0,16); g.fillText('list length n →',x0+w-100,y0+36);
+  METHODS.forEach(([m,name,col])=>{ g.strokeStyle=col; g.lineWidth=4; g.beginPath(); let started=false;
+    pts.forEach(s=>{ const v=opsAt(m,s,data), x=X(s), y=Y(v); if(!started){ g.moveTo(x,y); started=true; } else g.lineTo(x,y); }); g.stroke();
+    // dashed overlay for the extrapolated stretch
+    if(n>3000){ g.setLineDash([6,6]); g.strokeStyle='#fff'; g.lineWidth=2; g.beginPath(); g.moveTo(X(3000),Y(opsAt(m,3000,data))); pts.filter(s=>s>=3000).forEach(s=>g.lineTo(X(s),Y(opsAt(m,s,data)))); g.stroke(); g.setLineDash([]); } });
+  $('#read').innerHTML=METHODS.map(([m,name,col])=>`<div style="border-color:${col}"><small>${name}</small><b>${fmtOps(opsAt(m,n,data))}</b><small>${n>3000?'extended':'measured'}</small></div>`).join('');
+  $('#log').textContent=`Axes: ${logAxes?'logarithmic':'linear'}`;
+  check(n,data);
+}
+const fmtOps=v=>v>=1e9?(v/1e9).toFixed(1)+'G':v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(1)+'k':Math.round(v);
+function check(n,data){
+  const o=m=>opsAt(m,n,data);
+  if(n<=30&&arr==='random') find('overlap');
+  if(n>=10000&&arr==='random'&&o('selection')/o('merge')>100) find('bend');
+  if(arr==='sorted'&&n>=1000&&o('insertion')<o('merge')&&o('quick')>o('insertion')*50) find('sorted');
+  if(arr==='mostly'&&n>=1000) find('mostly');
+  if(logAxes) find('log');
+}
+// ----- the animated bars: frames recorded from the same algorithms on 40 items -----
+function frames(m,a0){
+  a0=a0.slice(); const F=[], snap=(a,hi)=>F.push({a:a.slice(),hi}); let a=a0.slice(); snap(a,-1);
+  if(m==='insertion'){ for(let i=1;i<a.length;i++){ const key=a[i]; let j=i-1; while(j>=0&&a[j]>key){ a[j+1]=a[j]; j--; snap(a,j+1); } a[j+1]=key; snap(a,j+1); } }
+  else if(m==='selection'){ for(let i=0;i<a.length-1;i++){ let mi=i; for(let j=i+1;j<a.length;j++) if(a[j]<a[mi]) mi=j; if(mi!==i){ [a[i],a[mi]]=[a[mi],a[i]]; snap(a,i); } } }
+  else if(m==='merge'){ const n=a.length, b=new Array(n); for(let w=1;w<n;w*=2){ for(let lo=0;lo<n;lo+=2*w){ const mid=Math.min(lo+w,n), hi=Math.min(lo+2*w,n); let i=lo,j=mid,k=lo; while(i<mid&&j<hi) b[k++]=a[i]<=a[j]?a[i++]:a[j++]; while(i<mid) b[k++]=a[i++]; while(j<hi) b[k++]=a[j++]; for(let t=lo;t<hi;t++) a[t]=b[t]; snap(a,lo); } } }
+  else { const st=[[0,a.length-1]]; while(st.length){ const [lo,hi]=st.pop(); if(lo>=hi) continue; const p=a[lo]; let i=lo; for(let j=lo+1;j<=hi;j++) if(a[j]<p){ i++; [a[i],a[j]]=[a[j],a[i]]; snap(a,i); } [a[lo],a[i]]=[a[i],a[lo]]; snap(a,i); st.push([lo,i-1],[i+1,hi]); } }
+  return F;
+}
+function drawBars(){ $('#bars').innerHTML=METHODS.map(([m,name,col])=>`<div class="pan"><h3><span style="color:${col}">${name.split(' ')[0]}</span><span id="fc-${m}" style="font-weight:400;color:var(--soft)">0 steps</span></h3><canvas id="cv-${m}" width="280" height="130"></canvas></div>`).join(''); }
+function paint(m,fr,col){ const cv=$('#cv-'+m), g=cv.getContext('2d'), a=fr.a, w=280/a.length; g.clearRect(0,0,280,130); a.forEach((v,i)=>{ const h=(v+1)/a.length*120; g.fillStyle=i===fr.hi?'#1A1C2A':col; g.globalAlpha=i===fr.hi?1:0.8; g.fillRect(i*w+1,128-h,w-2,h); }); g.globalAlpha=1; }
+function race(){
+  if(raceTimer){ clearInterval(raceTimer); raceTimer=null; }
+  const base=make(arr,40), F={}; METHODS.forEach(([m])=>F[m]=frames(m,base)); let t=0, maxF=Math.max(...METHODS.map(([m])=>F[m].length));
+  raceTimer=setInterval(()=>{ t++; METHODS.forEach(([m,name,col])=>{ const k=Math.min(t,F[m].length-1); paint(m,F[m][k],col); $('#fc-'+m).textContent=`${Math.min(t,F[m].length-1)}/${F[m].length-1} steps${t>=F[m].length-1?' ✓':''}`; });
+    if(t>=Math.min(maxF,1500)){ clearInterval(raceTimer); raceTimer=null; } },30);
+}
+function idle(){ const base=make(arr,40); METHODS.forEach(([m,name,col])=>{ paint(m,{a:base,hi:-1},col); $('#fc-'+m).textContent='ready'; }); }
+$('#race').onclick=race;
+document.querySelector('main').addEventListener('click',e=>{ const b=e.target.closest('[data-a]'); if(b){ arr=b.dataset.a; document.querySelectorAll('[data-a]').forEach(x=>x.classList.toggle('on',x===b)); if(raceTimer){ clearInterval(raceTimer); raceTimer=null; } idle(); plot(); } });
+$('#n').oninput=plot; $('#log').onclick=()=>{ logAxes=!logAxes; plot(); };
+const FINDS=[
+ ['overlap','Set the list length to 30 or less. Can you tell the four apart?'],
+ ['bend','Raise the length to 10,000 or more on a random list.'],
+ ['sorted','Switch to “already sorted” at 1,000 or more. What changes in the ranking?'],
+ ['mostly','Try “mostly sorted”.'],
+ ['log','Switch to logarithmic axes.']];
+const TELL={
+ overlap:'At small sizes every method finishes in a few hundred steps and the lines sit on top of each other. Nothing about 30 items could ever tell you which method will survive 30 million. This is why the right sorting method cannot be chosen by trying it on a small example.',
+ bend:'The two quadratic methods bend sharply upward while merge sort and quicksort hug the floor. Selection and insertion do work proportional to n squared: ten times more items means a hundred times more work. Merge and quick do about n log n: ten times more items, a bit over ten times the work. At this size the gap is more than a hundredfold, and it keeps widening.',
+ sorted:'The ranking reverses completely. Insertion sort sees each item already in place and does one comparison per item: the fastest of all. Quicksort with the first item as pivot is now the slowest of all: the pivot is always the smallest item, so each split peels off one item and does almost n² work. The same two programs trade places because of what the data looks like.',
+ mostly:'A nearly sorted list is the everyday case, and insertion sort loves it: it only has to move the few items that are out of place. This is why real library sorts begin by checking for existing order, and why “which method is fastest” has no answer until you say what the data is like.',
+ log:'On logarithmic axes a power of n becomes a straight line, and its slope is the exponent: the quadratic methods climb with slope 2, the n log n methods with slope barely above 1. The curve is the thing worth knowing. Any one value on it, at one size, tells you almost nothing.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+drawBars(); idle(); plot(); renderQs();
+</script>

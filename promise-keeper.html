@@ -1,0 +1,143 @@
+<meta charset="utf-8">
+<!-- Promise Keeper — Switches All the Way Down, Chapter 41 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F9;--card:#FFFFFF;--ink:#1A1C2A;--soft:#5B6172;--line:#E2E5EE;--pink:#E5197B;--cyan:#0090C8;--sun:#E8A400;--green:#12A66E;--orange:#E8620A;--red:#E23A3A;--violet:#7A4FE0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--green)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,20,50,.05)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--ink)}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:150px 1fr 90px;gap:10px;align-items:center;margin:5px 0}
+.sl input{accent-color:var(--pink)} .sl b{font-family:"JetBrains Mono",monospace;color:var(--sun);text-align:right}
+canvas{display:block;width:100%;height:auto;background:#FAFBFE;border:1px solid var(--line);border-radius:10px}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.read div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:22px;font-family:"JetBrains Mono",monospace}
+.read small{color:var(--soft);font-size:12px}
+.note{background:#E4F6EE;border:1px solid #B7E4CE;border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+.tog{display:flex;gap:6px;flex-wrap:wrap}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>The promise <span>keeper</span></h1>
+  <p>The internet loses packets, delivers them out of order, and sometimes duplicates them. Yet a file arrives whole and correct. That reliability is not in the wires — it is a set of rules built on top of them. Add the rules one at a time and watch a broken link become a trustworthy one.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="card">
+    <h2>The rules you have switched on</h2>
+    <div class="tog" id="rules"></div>
+    <div class="sl" style="margin-top:10px"><span>Packet loss</span><input type="range" id="loss" min="0" max="60" value="25"><b id="lossv"></b></div>
+    <div class="sl"><span>Reordering</span><input type="range" id="reorder" min="0" max="80" value="30"><b id="reorderv"></b></div>
+    <div class="bar" style="margin-top:6px"><button class="btn green" id="send">Send a 12-packet file</button><span id="say" style="color:var(--soft);font-size:14px"></span></div>
+  </section>
+  <section class="card"><canvas id="wire" width="1140" height="360" aria-label="Packets crossing"></canvas></section>
+  <div class="read" id="read"></div>
+</main>
+<aside class="card" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+let loss=0.25, reorder=0.3, rules={number:false,ack:false,retransmit:false,window:false}, seen={}, anim=null;
+const RULEDEFS=[['number','Number the packets'],['ack','Acknowledge each one'],['retransmit','Resend if no ack (timeout)'],['window','Send several at once (window)']];
+function renderRules(){ $('#rules').innerHTML=RULEDEFS.map(([k,t],i)=>`<button class="btn ${rules[k]?'on':''}" data-r="${k}">${rules[k]?'✓ ':''}${t}</button>`).join(''); }
+$('#rules').onclick=e=>{ const b=e.target.closest('[data-r]'); if(!b) return; const k=b.dataset.r;
+  rules[k]=!rules[k];
+  // rules build on each other: turning one on turns on the ones it needs
+  if(k==='ack'&&rules.ack) rules.number=true;
+  if(k==='retransmit'&&rules.retransmit){ rules.number=true; rules.ack=true; }
+  if(k==='window'&&rules.window){ rules.number=rules.ack=rules.retransmit=true; }
+  if(k==='number'&&!rules.number){ rules.ack=rules.retransmit=rules.window=false; }
+  if(k==='ack'&&!rules.ack){ rules.retransmit=rules.window=false; }
+  if(k==='retransmit'&&!rules.retransmit){ rules.window=false; }
+  renderRules(); send(); };
+['loss','reorder'].forEach(id=>$('#'+id).addEventListener('input',e=>{ if(id==='loss') loss=+e.target.value/100; else reorder=+e.target.value/100; $('#'+id+'v').textContent=e.target.value+'%'; send(); }));
+async function send(){
+  if(anim){ cancelAnimationFrame(anim); anim=null; }
+  const N=12; let events=[]; // each entry: {n, sent, arrived|null, ackd, resends}
+  // Simulate delivery under the current rules.
+  const inflight=rules.window?4:1;
+  let received=[], acked=new Set(), attempts=0, timeline=[], guard=0;
+  if(!rules.retransmit){
+    // One pass: send every packet once, each may be lost or reordered.
+    for(let n=0;n<N;n++){ attempts++; const lost=Math.random()<loss; timeline.push({n,lost}); if(!lost) received.push({n}); }
+    if(reorder>0&&!rules.number){ /* shuffle arrival order for the receiver's view */ received=shuffleSome(received,reorder); }
+    received.forEach(r=>acked.add(r.n));
+  } else {
+    // Acknowledge + resend: keep going until every packet is acked.
+    let sendPtr=0;
+    while(acked.size<N&&guard++<300){
+      const batch=[];
+      if(rules.window){ let n=0; while(batch.length<inflight&&n<N){ if(!acked.has(n)) batch.push(n); n++; } }
+      else { let n=0; while(n<N&&acked.has(n)) n++; if(n<N) batch.push(n); }
+      if(!batch.length) break;
+      for(const n of batch){ attempts++; const lost=Math.random()<loss; timeline.push({n,lost}); if(!lost){ received.push({n}); acked.add(n); } }
+    }
+  }
+  await animate(timeline,N);
+  const uniqueDelivered=new Set(received.map(r=>r.n));
+  const complete=rules.retransmit? acked.size===N : uniqueDelivered.size>0;
+  const inOrder = rules.number? true : isSorted(received.map(r=>r.n));
+  const gotAll = (rules.retransmit? acked.size : uniqueDelivered.size)===N;
+  const dupes = received.length-uniqueDelivered.size;
+  const fileOk = gotAll && (rules.number || inOrder);
+  $('#read').innerHTML=`<div><small>Packets sent (with resends)</small><b>${attempts}</b></div>`+
+    `<div><small>Delivered</small><b>${uniqueDelivered.size} of ${N}</b></div>`+
+    `<div><small>Arrived in order?</small><b style="color:${inOrder||rules.number?'var(--green)':'var(--red)'}">${rules.number?'sorted by number':inOrder?'yes':'no'}</b></div>`+
+    `<div><small>File reconstructed?</small><b style="color:${fileOk?'var(--green)':'var(--red)'}">${fileOk?'✓ perfect':'✗ broken'}</b></div>`;
+  $('#say').innerHTML=fileOk?'The file arrived complete and correct.':gotAll?'All packets arrived, but jumbled — the receiver cannot tell what order they belong in.':`${N-uniqueDelivered.size} packet${N-uniqueDelivered.size>1?'s':''} lost for good; the file has holes.`;
+  check(fileOk,gotAll,inOrder,uniqueDelivered.size,N,attempts);
+}
+function shuffleSome(arr,amt){ const a=arr.slice(); for(let i=0;i<a.length;i++){ if(Math.random()<amt){ const j=Math.min(a.length-1,i+1+(Math.random()*2|0)); [a[i],a[j]]=[a[j],a[i]]; } } return a; }
+function isSorted(a){ for(let i=1;i<a.length;i++) if(a[i]<a[i-1]) return false; return true; }
+function animate(timeline,N){ return new Promise(res=>{
+  const cv=$('#wire'), g=cv.getContext('2d'), W=cv.width, H=cv.height;
+  let t0=performance.now(), dur=1400;
+  function frame(now){ const p=Math.min(1,(now-t0)/dur); g.clearRect(0,0,W,H);
+    g.fillStyle='#5B6172'; g.font='14px Barlow'; g.fillText('sender',20,40); g.fillText('receiver',20,H-24);
+    g.strokeStyle='#E2E5EE'; g.beginPath(); g.moveTo(20,60); g.lineTo(W-20,60); g.moveTo(20,H-50); g.lineTo(W-20,H-50); g.stroke();
+    timeline.slice(0,60).forEach((pk,i)=>{ const x=60+(i%20)*54, laneY=60, endY=H-50;
+      // reorder jitter: shift arrival position
+      const jitter=rules.number?0:(Math.random()<0? 0:0);
+      const yy=laneY+(endY-laneY)*p*(pk.lost?0.55:1);
+      g.fillStyle=pk.lost?'#E23A3A':(rules.ack?'#12A66E':'#0090C8');
+      if(pk.lost&&p>0.55){ g.globalAlpha=Math.max(0,1-(p-0.55)/0.45); }
+      g.beginPath(); g.roundRect(x-16,yy-12,32,24,5); g.fill(); g.globalAlpha=1;
+      g.fillStyle='#fff'; g.font='bold 12px JetBrains Mono'; g.fillText(rules.number?pk.n:'?',x-5,yy+4);
+      if(pk.lost&&p>0.5){ g.fillStyle='#E23A3A'; g.font='11px Barlow'; g.fillText('lost',x-10,yy+30); } });
+    if(p<1) anim=requestAnimationFrame(frame); else res();
+  }
+  anim=requestAnimationFrame(frame);
+}); }
+$('#send').onclick=send;
+const FINDS=[
+ ['naked','Send with no rules on, at 25% loss. What arrives?'],
+ ['numbered','Switch on numbering. Now what can the receiver do that it could not before?'],
+ ['retrans','Add acknowledgements and resending. Turn loss up to 50%.'],
+ ['window','Switch on the window and compare how many rounds it takes.']];
+const TELL={
+ naked:'With no rules, the wire is honest about being unreliable: some packets vanish, the rest arrive in whatever order the network felt like, and the receiver has no way to tell either. A raw network is not a pipe; it is a pile of postcards, some of which never come.',
+ numbered:'Numbering is the first rule and it does two jobs at once: the receiver can sort the packets back into order however they arrive, and it can see which numbers are missing. You cannot fix a problem you cannot name; numbering lets the receiver name every gap.',
+ retrans:'Acknowledgements plus a timeout make loss survivable: the sender keeps a copy of each packet until the receiver says “got it”, and resends anything unacknowledged. At 50% loss it simply takes more tries, but the file still arrives whole. This pair — number, acknowledge, resend — is the heart of TCP.',
+ window:'Sending one packet and waiting for its ack wastes the whole round-trip time doing nothing. A window sends several at once and acknowledges them together, so the wire stays full. This is why real connections feel fast despite long distances — and deciding how big the window should be, without flooding the network, is exactly what congestion control does.'};
+function check(fileOk,gotAll,inOrder,delivered,N,attempts){
+  const on=Object.values(rules).filter(Boolean).length;
+  if(on===0&&loss>0.15&&!fileOk) find('naked');
+  if(rules.number&&!rules.ack) find('numbered');
+  if(rules.retransmit&&loss>=0.45&&fileOk) find('retrans');
+  if(rules.window&&fileOk) find('window');
+}
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+$('#lossv').textContent='25%'; $('#reorderv').textContent='30%'; renderRules(); renderQs(); send();
+</script>

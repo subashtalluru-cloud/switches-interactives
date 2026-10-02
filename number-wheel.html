@@ -1,0 +1,214 @@
+<meta charset="utf-8">
+<!-- E7 · The Number Wheel — Switches All the Way Down, Chapter 8 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2;--red:#FF3B3B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1200px;margin:0 auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--cyan)}
+header p{margin:4px 0 0;color:var(--soft);max-width:78ch}
+h2{font-size:18px;margin:0 0 8px;font-weight:800}
+.panel{background:var(--night2);border-radius:12px;padding:16px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:none;border-radius:6px;padding:8px 13px;cursor:pointer;background:var(--night3);color:#fff}
+.btn.pink{background:var(--pink)}.btn.cyan{background:var(--cyan);color:var(--ink)}.btn.sun{background:var(--sun);color:var(--ink)}.btn.green{background:var(--green);color:var(--ink)}
+.btn.on{outline:3px solid var(--sun)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.odo{display:flex;gap:8px;justify-content:center;margin:12px 0}
+.digit{width:58px;height:78px;border-radius:8px;background:#0F0B2E;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;transition:transform .12s,background .12s}
+.digit b{font-family:"JetBrains Mono",monospace;font-size:40px;line-height:1}
+.digit small{color:var(--soft);font-size:11px}
+.digit.flip{background:var(--pink);transform:translateY(-6px)}
+.digit.one b{color:var(--sun)}
+.carry{position:absolute;left:-14px;top:18px;color:var(--sun);font-weight:800;font-size:18px}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.read div{background:var(--night3);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:26px;font-family:"JetBrains Mono",monospace;color:var(--sun)}
+.read small{color:var(--soft);font-size:12px}
+.two{display:grid;grid-template-columns:minmax(360px,520px) 1fr;gap:14px;align-items:start}
+svg{width:100%;height:auto}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.warn{background:var(--red);color:#fff;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600}
+.q{background:var(--night3);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+input[type=number]{width:70px;font:inherit;font-weight:700;border:none;border-radius:5px;padding:5px 6px}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>The number <span>wheel</span></h1>
+  <p>A computer counts like a car’s odometer with only two digits per wheel. And a fixed number of wheels means the numbers do not run along a line: they go round in a circle. Everything strange about computer arithmetic follows from that circle.</p>
+</header>
+
+<section class="panel">
+  <h2>1 · The odometer</h2>
+  <div class="bar"><span style="color:var(--soft)">Base</span><span id="bases"></span><span style="flex:1"></span>
+    <button class="btn pink" id="inc">+1</button><button class="btn" id="run">Count by itself</button><button class="btn" id="zero">Back to zero</button></div>
+  <div class="odo" id="odo"></div>
+  <div class="read" id="oread"></div>
+</section>
+
+<section class="panel">
+  <h2>2 · The wheel</h2>
+  <div class="two">
+    <div><svg id="wheel" viewBox="0 0 520 520" aria-label="Four-bit number wheel"></svg></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="bar"><button class="btn" id="mode">Labels: unsigned (0 to 15)</button><button class="btn" id="size">4 bits</button></div>
+      <div class="bar"><span>Start at</span><input type="number" id="a" value="3"><button class="btn cyan" id="plus">+ walk clockwise</button><button class="btn" id="minus">− walk anticlockwise</button><input type="number" id="b" value="5" min="0" max="255"><span>steps</span></div>
+      <div class="bar"><button class="btn sun" id="neg">Negate the pointer: flip every bit, then add one</button></div>
+      <div id="wsay"></div>
+      <div class="read" id="wread"></div>
+      <div><h2 style="font-size:15px">Things to find</h2><div id="qs"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>3 · On the bench: eight switches, eight lights</h2>
+  <div class="two">
+    <div><svg id="bench" viewBox="0 0 560 330" aria-label="Breadboard with eight switches and eight LEDs"></svg></div>
+    <div style="font-size:14px">
+      <p style="margin-top:0">This is the first thing to build, and every later test uses it. Eight DIP switches, each with a 10 kΩ resistor pulling its line down to 0 V so an open switch reads a clean 0; each line drives an LED through a 330 Ω resistor to ground. Click the switches.</p>
+      <div class="read" id="bread"></div>
+      <p style="color:var(--soft)">The lights never say “−5”. They show a pattern. Whether 11111011 means 251 or −5 is decided by whoever reads it, which is you now, and later a circuit you build.</p>
+    </div>
+  </div>
+</section>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+// ---------- 1. Odometer ----------
+let base=2, odo=Array(8).fill(0), timer=null, lastFlips=0, maxFlips=0, maxAt='';
+const val=()=>odo.reduce((a,d,i)=>a+d*Math.pow(base,i),0);
+function drawOdo(flip=-1,carryAt=-1){
+  $('#odo').innerHTML=[...odo].map((d,i)=>i).reverse().map(i=>`<div class="digit ${flip===i?'flip':''} ${odo[i]?'one':''}">${carryAt===i?'<span class="carry">←1</span>':''}<b>${odo[i].toString(base).toUpperCase()}</b><small>${base===2?Math.pow(2,i):base===10?'×'+Math.pow(10,i):'×16^'+i}</small></div>`).join('');
+  $('#oread').innerHTML=`<div><small>Value</small><b>${val().toLocaleString()}</b></div><div><small>Wheels that turned on the last +1</small><b>${lastFlips}</b></div><div><small>Most wheels turned at once so far</small><b>${maxFlips}</b><small>${maxAt}</small></div><div><small>Largest value these 8 wheels hold</small><b>${(Math.pow(base,8)-1).toLocaleString()}</b></div>`;
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+// Adding one: the rightmost wheel turns; if it rolls over to 0 it passes a carry left, and so on.
+async function inc(anim=true){
+  const before=val(); let i=0, flips=0;
+  while(i<8){ odo[i]=(odo[i]+1)%base; flips++; if(anim){ drawOdo(i,odo[i]===0&&i<7?i+1:-1); await sleep(160); } if(odo[i]!==0) break; i++; }
+  lastFlips=flips; if(flips>maxFlips){ maxFlips=flips; maxAt=`${before} → ${val()}`; }
+  if(i===8) { lastFlips=8; }
+  drawOdo();
+  if(base===2&&flips>=4) found('o1');
+  if(i===8) found('o2');
+}
+$('#inc').onclick=()=>inc();
+$('#run').onclick=()=>{ if(timer){ clearInterval(timer); timer=null; $('#run').textContent='Count by itself'; return; } $('#run').textContent='Stop'; timer=setInterval(()=>inc(false),base===2?90:40); };
+$('#zero').onclick=()=>{ odo=Array(8).fill(0); lastFlips=0; drawOdo(); };
+$('#bases').innerHTML=[2,10,16].map(b=>`<button class="btn ${b===2?'on':''}" data-b="${b}">${b}</button>`).join(' ');
+$('#bases').onclick=e=>{ const b=e.target.closest('[data-b]'); if(!b) return; base=+b.dataset.b; odo=Array(8).fill(0); maxFlips=0; maxAt=''; lastFlips=0; $('#bases').querySelectorAll('.btn').forEach(x=>x.classList.toggle('on',x===b)); drawOdo(); };
+
+// ---------- 2. The wheel ----------
+let BITS=4, signed=false, ptr=3, trail=null, cliffHit=false;
+const N=()=>1<<BITS, label=p=>signed&&p>=N()/2?p-N():p, bin=p=>p.toString(2).padStart(BITS,'0');
+const fromLabel=v=>((v%N())+N())%N();
+function drawWheel(hl){
+  const n=N(), cx=260, cy=260, R=200; let h='<defs><filter id="g"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+  h+=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#3A2E8A" stroke-width="54"/>`;
+  if(trail) trail.forEach(p=>{ const a=(p/n)*2*Math.PI-Math.PI/2; h+=`<circle cx="${cx+R*Math.cos(a)}" cy="${cy+R*Math.sin(a)}" r="${n>16?4:22}" fill="#00C2FF" opacity=".35"/>`; });
+  // the cliff: where the labels jump
+  const cliff=signed?n/2:0, ca=(cliff-0.5)/n*2*Math.PI-Math.PI/2;
+  h+=`<line x1="${cx+(R-40)*Math.cos(ca)}" y1="${cy+(R-40)*Math.sin(ca)}" x2="${cx+(R+40)*Math.cos(ca)}" y2="${cy+(R+40)*Math.sin(ca)}" stroke="#FF3B3B" stroke-width="6" stroke-linecap="round" ${cliffHit?'filter="url(#g)"':''}/>`;
+  h+=`<text x="${cx+(R+56)*Math.cos(ca)}" y="${cy+(R+56)*Math.sin(ca)+5}" text-anchor="middle" font-size="13" font-weight="800" fill="#FF3B3B">cliff</text>`;
+  for(let p=0;p<n;p++){ const a=(p/n)*2*Math.PI-Math.PI/2, x=cx+R*Math.cos(a), y=cy+R*Math.sin(a), on=p===ptr, neg=label(p)<0;
+    if(n<=16){
+      h+=`<circle cx="${x}" cy="${y}" r="23" fill="${on?'#FFC700':neg?'#FF2E88':'#14123A'}" stroke="${on?'#fff':'#6b5fd0'}" stroke-width="2" ${on?'filter="url(#g)"':''}/>`;
+      h+=`<text x="${x}" y="${y+6}" text-anchor="middle" font-size="17" font-weight="800" fill="${on?'#14123A':'#fff'}" font-family="JetBrains Mono,monospace">${label(p)}</text>`;
+      const bx=cx+(R-62)*Math.cos(a), by=cy+(R-62)*Math.sin(a);
+      h+=`<text x="${bx}" y="${by+4}" text-anchor="middle" font-size="12" fill="${on?'#FFC700':'#C9C4F2'}" font-family="JetBrains Mono,monospace">${bin(p)}</text>`;
+    } else if(on||p%32===0){ h+=`<circle cx="${x}" cy="${y}" r="${on?10:4}" fill="${on?'#FFC700':'#C9C4F2'}"/>`; if(p%32===0) h+=`<text x="${cx+(R-40)*Math.cos(a)}" y="${cy+(R-40)*Math.sin(a)+4}" text-anchor="middle" font-size="12" fill="#C9C4F2">${label(p)}</text>`; }
+    else h+=`<circle cx="${x}" cy="${y}" r="2" fill="${label(p)<0?'#FF2E88':'#6b5fd0'}"/>`;
+  }
+  h+=`<text x="${cx}" y="${cy-10}" text-anchor="middle" font-size="44" font-weight="800" fill="#FFC700" font-family="JetBrains Mono,monospace">${label(ptr)}</text><text x="${cx}" y="${cy+22}" text-anchor="middle" font-size="18" fill="#fff" font-family="JetBrains Mono,monospace">${bin(ptr)}</text>`;
+  h+=`<text x="${cx}" y="${cy+48}" text-anchor="middle" font-size="12" fill="#C9C4F2">${signed?'signed':'unsigned'} · ${BITS} bits</text>`;
+  $('#wheel').innerHTML=h;
+  $('#wread').innerHTML=`<div><small>The bits</small><b>${bin(ptr)}</b></div><div><small>Read as unsigned</small><b>${ptr}</b></div><div><small>Read as signed</small><b>${ptr>=N()/2?ptr-N():ptr}</b></div>`;
+}
+function say(h){ $('#wsay').innerHTML=h; }
+async function walk(steps,dir){
+  trail=[]; cliffHit=false; const start=ptr, cliff=signed?N()/2:0; let crossed=false;
+  for(let s=0;s<steps;s++){ const prev=ptr; ptr=(ptr+dir+N())%N(); trail.push(prev);
+    if((dir>0&&ptr===cliff)||(dir<0&&prev===cliff)){ crossed=true; cliffHit=true; }
+    drawWheel(); await sleep(steps>40?8:steps>16?40:140); }
+  return {start,crossed};
+}
+async function arith(dir){
+  const a=+$('#a').value, b=Math.max(0,Math.min(255,+$('#b').value||0));
+  ptr=fromLabel(a); drawWheel(); await sleep(250);
+  await walk(b,dir);
+  // In signed mode, walking more than half-way round clockwise is the same as adding a negative number.
+  const asNeg=signed&&dir>0&&b>=N()/2&&b<N(), eff=asNeg?b-N():dir*b, trueAns=a+eff, got=label(ptr);
+  const lo=signed?-N()/2:0, hi=signed?N()/2-1:N()-1, over=trueAns<lo||trueAns>hi;
+  const expr=asNeg?`${a} + ${b} steps (the same as ${a} − ${N()-b})`:`${a} ${dir>0?'+':'−'} ${b}`;
+  say(over?`<div class="warn">${expr}: the pointer went over the cliff and landed on ${got}. The true answer, ${trueAns}, is not on this wheel at all. This is overflow: the bits are right, the meaning is wrong.</div>`
+    :`<div class="note">${expr} = ${got}.${dir<0?` Now try the same subtraction as an addition: start at ${a} and walk clockwise ${N()-b} steps.`:''}</div>`);
+  if(!signed&&over&&dir>0) found('w1');
+  if(signed&&dir<0&&!over&&got<0) found('w2');
+  if(asNeg&&!over) found('w3');
+  if(signed&&over&&dir>0&&a===N()/2-1&&b===1) found('w4');
+}
+$('#plus').onclick=()=>arith(1); $('#minus').onclick=()=>arith(-1);
+$('#mode').onclick=()=>{ signed=!signed; $('#mode').textContent=signed?`Labels: signed (${-N()/2} to ${N()/2-1})`:`Labels: unsigned (0 to ${N()-1})`; trail=null; cliffHit=false; say(signed?'<div class="note">Nothing about the bits changed. Only the names written on the bottom half of the wheel. 1111 is now −1: one step anticlockwise from 0, which is exactly where it always was.</div>':''); drawWheel(); if(signed) found('w0'); };
+$('#size').onclick=()=>{ BITS=BITS===4?8:4; $('#size').textContent=`${BITS} bits`; ptr=ptr%N(); $('#mode').textContent=signed?`Labels: signed (${-N()/2} to ${N()/2-1})`:`Labels: unsigned (0 to ${N()-1})`; trail=null; drawWheel(); };
+// Negation by the bit trick: invert every bit, then add one. On the wheel this is a mirror image through 0.
+$('#neg').onclick=async()=>{
+  const before=ptr, inv=(~ptr)&(N()-1);
+  say(`<div class="note">Flip every bit: ${bin(before)} → ${bin(inv)}…</div>`); ptr=inv; drawWheel(); await sleep(900);
+  ptr=(inv+1)%N(); drawWheel();
+  if(signed&&before===ptr&&before!==0){ say(`<div class="warn">…then add one: ${bin(ptr)}. ${label(before)} came back as itself! Its negative, ${-label(before)}, is not on this wheel: there is one more negative number than positive ones, and the most negative is its own negative. Real programs trip over this.</div>`); found('w5'); return; }
+  say(`<div class="note">…then add one: ${bin(ptr)}. ${signed?`${label(before)} became ${label(ptr)}.`:`Switch the labels to signed and you will see what this did.`} Flipping the bits reflects the pointer across the wheel; adding one lines the reflection up with zero. That is why a machine that can only add and flip bits can also subtract.</div>`);
+  if(signed) found('w5');
+};
+const FINDS=[
+  ['o1','In base 2, find the +1 that turns the most wheels at once. Which numbers are just before it?'],
+  ['o2','Count until all eight wheels roll over. What does the odometer read after 255?'],
+  ['w1','Unsigned, 4 bits: work out 13 + 5 on the wheel.'],
+  ['w0','Switch the labels to signed. Which bit pattern is −1?'],
+  ['w2','Signed: 3 − 5, walking anticlockwise.'],
+  ['w3','Now get the same answer walking only clockwise. (How many steps round the wheel is the same as 5 back?)'],
+  ['w5','Negate a number with the flip-and-add-one button.'],
+  ['w4','Signed: 7 + 1.']];
+const TELL={
+  o1:'Just before a power of two, every wheel below it shows 1 (0111, or 0111 1111). Adding one sets off a chain of carries all the way along: every wheel turns. This chain is the carry ripple you will build in gates at the Adder station.',
+  o2:'After 255 comes 0. The ninth digit, the carry out of the top wheel, has nowhere to go and is lost. Eight wheels can only ever hold 256 different patterns, so counting is really going round a circle.',
+  w1:'13 + 5 lands on 2. The answer, 18, needs a fifth bit the wheel does not have; the carry fell off the top, exactly as on the odometer.',
+  w0:'1111 is −1, one step before 0. The bits are identical; only the labels changed. Signed and unsigned are two ways of reading the same wheel.',
+  w2:'3 − 5 = −2, and no overflow: in signed numbers, zero is not a cliff any more. The cliff has moved to the far side, between 7 and −8.',
+  w3:'Walking 11 clockwise lands exactly where walking 5 anticlockwise did, because 11 + 5 = 16, one full turn. So subtracting 5 is adding 11, and 11 is the pattern for −5. A machine never needs a subtractor: it adds the negative.',
+  w5:'Flip the bits and add one: that is how the machine finds the negative of a number, and it is what the XOR row and carry-in do in the subtracting adder you build later.',
+  w4:'7 + 1 = −8. The bits did exactly the right thing (0111 + 1 = 1000); it is the labelling that jumped from the top of the positive half to the bottom of the negative half. Real programs have crashed rockets and bank balances this way.'};
+let seen={};
+function found(id){ if(id==='w4b') return; if(seen[id]) return; seen[id]=1; renderQs(); const box=id[0]==='o'?null:'#wsay'; if(TELL[id]){ if(box) $('#wsay').innerHTML+=`<div class="note" style="margin-top:6px">${TELL[id]}</div>`; else $('#oread').insertAdjacentHTML('afterend',`<div class="note" style="margin-top:8px">${TELL[id]}</div>`); } }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+
+// ---------- 3. The bench ----------
+let sw=[0,0,0,0,0,0,0,0];
+function drawBench(){
+  let h='<defs><filter id="lg"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+  h+=`<rect x="10" y="10" width="540" height="310" rx="10" fill="#F4F1FF"/>`;
+  for(let r=0;r<24;r++) for(let c=0;c<8;c++) h+=`<circle cx="${40+r*20}" cy="${150+c*14}" r="2.4" fill="#C8C1EE"/>`;
+  h+=`<rect x="20" y="20" width="520" height="12" rx="3" fill="#FF3B3B" opacity=".75"/><text x="30" y="30" font-size="10" fill="#fff" font-weight="700">+5 V</text>`;
+  h+=`<rect x="20" y="298" width="520" height="12" rx="3" fill="#3A6BFF" opacity=".75"/><text x="30" y="308" font-size="10" fill="#fff" font-weight="700">0 V</text>`;
+  h+=`<rect x="60" y="48" width="250" height="56" rx="4" fill="#E53B6E"/><text x="185" y="62" text-anchor="middle" font-size="10" fill="#fff" font-weight="700">DIP SWITCH ×8</text>`;
+  for(let i=0;i<8;i++){ const x=76+i*29, on=sw[i];
+    h+=`<g data-sw="${i}" style="cursor:pointer"><rect x="${x}" y="68" width="18" height="30" rx="2" fill="#fff"/><rect x="${x+2}" y="${on?70:82}" width="14" height="14" rx="2" fill="#14123A"/></g>`;
+    h+=`<text x="${x+9}" y="116" text-anchor="middle" font-size="10" fill="#14123A">${7-i}</text>`;
+    const lx=360+i*22;
+    h+=`<line x1="${x+9}" y1="104" x2="${x+9}" y2="140" stroke="#8A83B8" stroke-width="2"/><path d="M${x+9},140 Q${(x+lx)/2},${150+i*6} ${lx},${200}" stroke="${on?'#FFC700':'#8A83B8'}" stroke-width="2" fill="none"/>`;
+    h+=`<rect x="${lx-3}" y="200" width="6" height="22" fill="#D2A24C"/><text x="${lx}" y="236" text-anchor="middle" font-size="8" fill="#14123A">330</text>`;
+    h+=`<circle cx="${lx}" cy="258" r="9" fill="${on?'#FF2E88':'#5A2340'}" ${on?'filter="url(#lg)"':''}/><line x1="${lx}" y1="267" x2="${lx}" y2="298" stroke="#8A83B8" stroke-width="2"/>`;
+  }
+  h+=`<text x="360" y="190" font-size="10" fill="#14123A">330 Ω, then LED to 0 V</text><text x="70" y="136" font-size="10" fill="#14123A">each line: 10 kΩ down to 0 V</text>`;
+  $('#bench').innerHTML=h;
+  const v=sw.reduce((a,b)=>a*2+b,0);
+  $('#bread').innerHTML=`<div><small>Pattern</small><b>${sw.join('')}</b></div><div><small>Unsigned</small><b>${v}</b></div><div><small>Signed</small><b>${v>127?v-256:v}</b></div>`;
+}
+$('#bench').addEventListener('click',e=>{ const g=e.target.closest('[data-sw]'); if(g){ sw[+g.dataset.sw]^=1; drawBench(); } });
+
+drawOdo(); drawWheel(); renderQs(); drawBench();
+</script>

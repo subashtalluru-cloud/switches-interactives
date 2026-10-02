@@ -1,0 +1,174 @@
+<meta charset="utf-8">
+<!-- E9 · The Sampling Microphone — Switches All the Way Down, Chapter 10 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1220px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 330px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--cyan)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:17px;margin:0 0 8px;font-weight:800}
+.panel{background:var(--night2);border-radius:12px;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:none;border-radius:6px;padding:8px 13px;cursor:pointer;background:var(--night3);color:#fff}
+.btn.pink{background:var(--pink)}.btn.cyan{background:var(--cyan);color:var(--ink)}.btn.sun{background:var(--sun);color:var(--ink)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sl{display:grid;grid-template-columns:150px 1fr 130px;gap:10px;align-items:center;margin:6px 0}
+.sl input{accent-color:var(--pink)}
+.sl b{font-family:"JetBrains Mono",monospace;font-size:18px;color:var(--sun);text-align:right}
+canvas{display:block;width:100%;height:auto;border-radius:8px;background:#0F0B2E}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.read div{background:var(--night3);border-radius:8px;padding:8px 10px}
+.read b{display:block;font-size:24px;font-family:"JetBrains Mono",monospace;color:var(--sun)}
+.read small{color:var(--soft);font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--night3);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+.key{font-size:13px;color:var(--soft);display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Catching a <span>wave</span> in numbers</h1>
+  <p>A microphone gives a smooth, continuous voltage. A computer can only keep a list of numbers: a measurement every so often, each rounded to a fixed number of bits. Choose how often and how finely, and listen to what survives. Headphones help; keep the volume low.</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="panel">
+    <div class="sl"><span>Tone</span><input type="range" id="f" min="0" max="1000" value="430" aria-label="Tone frequency"><b id="fv"></b></div>
+    <div class="sl"><span>Samples per second</span><input type="range" id="fs" min="0" max="1000" value="1000" aria-label="Sample rate"><b id="fsv"></b></div>
+    <div class="sl"><span>Bits per sample</span><input type="range" id="bits" min="1" max="16" value="16" aria-label="Bits per sample"><b id="bv"></b></div>
+    <div class="bar" style="margin-top:8px">
+      <button class="btn pink" id="play">▶ Play the tone</button>
+      <button class="btn cyan" id="sweep">▶ Play a rising sweep, 200 → 8,000 Hz</button>
+      <button class="btn" id="chord">▶ Play a chord</button>
+      <button class="btn" id="stop">■ Stop</button>
+      <button class="btn sun" id="cd">CD settings</button><button class="btn" id="phone">Old phone settings</button>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>What the numbers capture</h2>
+    <canvas id="wave" width="1600" height="500"></canvas>
+    <div class="key"><span style="color:#6b62b8">━ the real sound</span><span style="color:#FFC700">● the samples kept</span><span style="color:#00C2FF">━ what the numbers give back (stepped)</span><span style="color:#FF2E88">━ what you hear after smoothing</span></div>
+  </section>
+  <div class="read" id="read"></div>
+  <div class="grid2">
+    <section class="panel"><h2>Tone in, tone out</h2><canvas id="fold" width="800" height="560"></canvas>
+      <p style="font-size:13px;color:var(--soft);margin:6px 0 0">Across: the tone you play. Up: the tone the samples describe. Above half the sample rate, the line folds back down.</p></section>
+    <section class="panel"><h2>The wagon wheel</h2><canvas id="wheel" width="800" height="560"></canvas>
+      <p style="font-size:13px;color:var(--soft);margin:6px 0 0">A wheel turning at the tone’s speed, photographed once per sample. The pink spoke shows where the camera caught it each time.</p></section>
+  </div>
+</main>
+<aside class="panel" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const FMIN=100,FMAX=12000, SMIN=1000,SMAX=44100;
+const logMap=(v,a,b)=>a*Math.pow(b/a,v/1000);
+let f=0, fs=0, bits=16, ctx=null, src=null, seen={}, sweeping=false;
+function readSliders(){ f=Math.round(logMap(+$('#f').value,FMIN,FMAX)); fs=Math.round(logMap(+$('#fs').value,SMIN,SMAX)); bits=+$('#bits').value; }
+// The tone the samples actually describe: fold f into the band 0 … fs/2.
+function alias(fr,rate){ let m=fr%rate; const neg=m>rate/2; if(neg) m=rate-m; return {fa:m,neg}; }
+const quant=(v,b)=>{ if(b>=16) return Math.round(v*32767)/32767; const L=Math.pow(2,b); return Math.max(-1,Math.min(1,(Math.floor((v+1)/2*L)+0.5)/L*2-1)); };
+// ---------- audio: sample-and-hold, quantise, then a reconstruction filter, like a real converter ----------
+function makeBuffer(kind,dur){
+  const R=ctx.sampleRate, N=Math.floor(R*dur), buf=ctx.createBuffer(1,N,R), d=buf.getChannelData(0);
+  const f0=200,f1=8000, k=Math.log(f1/f0);
+  const sig=ts=>{
+    if(kind==='sweep') return Math.sin(2*Math.PI*f0*dur/k*(Math.exp(k*ts/dur)-1));
+    if(kind==='chord') return (Math.sin(2*Math.PI*f*ts)+Math.sin(2*Math.PI*f*1.26*ts)+Math.sin(2*Math.PI*f*1.5*ts))/3;
+    return Math.sin(2*Math.PI*f*ts); };
+  let lastK=-1, held=0;
+  for(let i=0;i<N;i++){ const t=i/R, kk=Math.floor(t*fs); if(kk!==lastK){ lastK=kk; held=quant(sig(kk/fs),bits); } d[i]=held; }
+  const ramp=Math.floor(R*0.02); for(let i=0;i<ramp;i++){ d[i]*=i/ramp; d[N-1-i]*=i/ramp; }
+  return buf;
+}
+function play(kind){
+  stop(); ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+  const dur=kind==='sweep'?7:2.5, s=ctx.createBufferSource(); s.buffer=makeBuffer(kind,dur);
+  const cut=Math.min(fs/2*0.9,ctx.sampleRate/2-100);
+  const lp1=ctx.createBiquadFilter(), lp2=ctx.createBiquadFilter(); [lp1,lp2].forEach(l=>{ l.type='lowpass'; l.frequency.value=cut; l.Q.value=0.7; });
+  const g=ctx.createGain(); g.gain.value=0.14;
+  s.connect(lp1); lp1.connect(lp2); lp2.connect(g); g.connect(ctx.destination); s.start(); src=s;
+  if(kind==='sweep'){ sweeping=true; const t0=performance.now(); const tick=()=>{ if(!sweeping) return; const t=(performance.now()-t0)/1000; if(t>dur){ sweeping=false; readSliders(); draw(); return; }
+      f=Math.round(200*Math.pow(40,t/dur)); drawWave(); drawFold(); readout(); requestAnimationFrame(tick); }; tick();
+    if(fs<16000) find('sweep'); }
+  s.onended=()=>{ sweeping=false; };
+  if(bits<=4) find('bits');
+}
+function stop(){ if(src){ try{src.stop();}catch(e){} src=null; } if(sweeping){ sweeping=false; readSliders(); draw(); } }
+// ---------- pictures ----------
+function drawWave(){
+  const cv=$('#wave'), g=cv.getContext('2d'), W=cv.width, H=cv.height, mid=H/2, A=H*0.4;
+  g.clearRect(0,0,W,H);
+  const span=Math.max(3/f, 12/fs), X=t=>t/span*W, Y=v=>mid-v*A, {fa,neg}=alias(f,fs);
+  g.strokeStyle='#3A2E8A'; g.lineWidth=2; g.beginPath(); g.moveTo(0,mid); g.lineTo(W,mid); g.stroke();
+  g.strokeStyle='#6b62b8'; g.lineWidth=3; g.beginPath(); for(let i=0;i<=1600;i++){ const t=i/1600*span; g.lineTo(X(t),Y(Math.sin(2*Math.PI*f*t))); } g.stroke();
+  // what the numbers give back: a staircase
+  g.strokeStyle='#00C2FF'; g.lineWidth=4; g.beginPath(); const n=Math.ceil(span*fs);
+  for(let k=0;k<=n;k++){ const t=k/fs, v=quant(Math.sin(2*Math.PI*f*t),bits); g.lineTo(X(t),Y(v)); g.lineTo(X((k+1)/fs),Y(v)); } g.stroke();
+  // what you hear: the smooth wave the samples describe, at the folded frequency
+  g.strokeStyle='#FF2E88'; g.lineWidth=5; g.beginPath(); for(let i=0;i<=1600;i++){ const t=i/1600*span; g.lineTo(X(t),Y((neg?-1:1)*Math.sin(2*Math.PI*fa*t))); } g.stroke();
+  g.fillStyle='#FFC700'; for(let k=0;k<=n;k++){ const t=k/fs; g.beginPath(); g.arc(X(t),Y(quant(Math.sin(2*Math.PI*f*t),bits)),n>80?4:9,0,7); g.fill(); }
+  if(bits<16){ g.strokeStyle='rgba(255,255,255,.08)'; g.lineWidth=1; const L=Math.pow(2,bits); if(L<=64) for(let q=0;q<=L;q++){ const y=Y(q/L*2-1); g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); } }
+  g.fillStyle='#C9C4F2'; g.font='26px Barlow'; g.fillText(`${(span*1000).toFixed(2)} ms shown`,14,34);
+}
+function drawFold(){
+  const cv=$('#fold'), g=cv.getContext('2d'), W=cv.width, H=cv.height, x0=70, y0=H-60, w=W-100, h=H-100, xm=FMAX, ym=Math.max(fs/2,1);
+  g.clearRect(0,0,W,H); g.strokeStyle='#3A2E8A'; g.lineWidth=2; g.strokeRect(x0,y0-h,w,h);
+  g.fillStyle='#C9C4F2'; g.font='24px Barlow';
+  for(let v=0;v<=xm;v+=4000) g.fillText(`${v/1000}k`,x0+v/xm*w-12,y0+32);
+  g.fillText(`${(fs/2/1000).toFixed(1)}k`,8,y0-h+8); g.fillText('0',40,y0);
+  const nyq=x0+fs/2/xm*w; g.strokeStyle='#FF6B00'; g.setLineDash([8,8]); g.beginPath(); g.moveTo(nyq,y0-h); g.lineTo(nyq,y0); g.stroke(); g.setLineDash([]);
+  g.fillStyle='#FF6B00'; if(nyq<x0+w-60) g.fillText('half the sample rate',Math.min(nyq+8,x0+w-220),y0-h+30);
+  g.strokeStyle='#00C2FF'; g.lineWidth=4; g.beginPath(); for(let i=0;i<=800;i++){ const fr=i/800*xm; g.lineTo(x0+fr/xm*w,y0-alias(fr,fs).fa/ym*h); } g.stroke();
+  const a=alias(f,fs); g.fillStyle='#FF2E88'; g.beginPath(); g.arc(x0+Math.min(f,xm)/xm*w,y0-a.fa/ym*h,13,0,7); g.fill();
+}
+let wheelAngle=0, lastFrame=0;
+function drawWheel(now){
+  requestAnimationFrame(drawWheel);
+  if(now-lastFrame<220) return; lastFrame=now;
+  wheelAngle+=2*Math.PI*f/fs;   // one photograph per sample: the wheel turns f/fs of a revolution between photos
+  const cv=$('#wheel'), g=cv.getContext('2d'), W=cv.width, H=cv.height, cx=W/2, cy=H/2-10, R=H*0.36;
+  g.clearRect(0,0,W,H);
+  g.strokeStyle='#3A2E8A'; g.lineWidth=18; g.beginPath(); g.arc(cx,cy,R,0,7); g.stroke();
+  for(let s=1;s<6;s++){ const a=wheelAngle+s*Math.PI*2/6; g.strokeStyle='#6b62b8'; g.lineWidth=8; g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+R*Math.cos(a),cy+R*Math.sin(a)); g.stroke(); }
+  g.strokeStyle='#FF2E88'; g.lineWidth=14; g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+R*Math.cos(wheelAngle),cy+R*Math.sin(wheelAngle)); g.stroke();
+  g.fillStyle='#FFC700'; g.beginPath(); g.arc(cx,cy,18,0,7); g.fill();
+  const turns=f/fs, frac=turns-Math.round(turns);
+  g.fillStyle='#fff'; g.font='26px Barlow'; g.textAlign='center';
+  g.fillText(`Really turns ${turns.toFixed(2)} revolutions between photos`,cx,H-44);
+  g.fillStyle=frac<-0.001?'#FF2E88':'#00C2FF'; g.fillText(Math.abs(frac)<0.01?'Looks frozen':frac<0?'Looks like it turns backwards':'Looks like it turns forwards',cx,H-12);
+  g.textAlign='left';
+  if(frac<-0.02&&turns>0.5) find('wheel');
+}
+function readout(){
+  const {fa}=alias(f,fs), ok=Math.abs(fa-f)<1;
+  $('#read').innerHTML=`<div><small>You play</small><b>${f.toLocaleString()} Hz</b></div><div><small>The samples describe</small><b style="color:${ok?'var(--green)':'var(--pink)'}">${Math.round(fa).toLocaleString()} Hz</b><small>${ok?'faithful':'a different tone: alias'}</small></div>`+
+    `<div><small>Samples per wave</small><b>${(fs/f).toFixed(1)}</b><small>need more than 2</small></div><div><small>Data per second</small><b>${(fs*bits/8/1000).toFixed(1)} kB</b><small>${fs.toLocaleString()} × ${bits} bits</small></div>`;
+  if(f>=2500&&ok&&fs<2.3*f) find('nyq');
+}
+function draw(){ $('#fv').textContent=`${f.toLocaleString()} Hz`; $('#fsv').textContent=`${fs.toLocaleString()} /s`; $('#bv').textContent=`${bits} bit${bits>1?'s':''}`; drawWave(); drawFold(); readout(); renderQs(); }
+const FINDS=[
+ ['nyq','Play a tone above 2,500 Hz, then lower the sample rate until it only just still sounds right. How many samples per wave is that?'],
+ ['sweep','Lower the sample rate to around 8,000 and play the rising sweep. Listen to what happens half way.'],
+ ['wheel','Make the wagon wheel look as if it is turning backwards.'],
+ ['bits','Drop to 4 bits or fewer and play the tone.'],
+ ['cd','Press “CD settings”. Why those two numbers?']];
+const TELL={
+ nyq:'Just over two samples per wave is the limit: the rate must be more than twice the highest tone. Below that, the samples fit a lower tone better than the real one, and the lower tone is what comes out. This is the Nyquist limit, and it is a fact about numbers, not about microphones.',
+ sweep:'The sweep rises until it passes half the sample rate, then appears to fall, though you never stopped making it rise. Every tone above the limit is folded back into the range below it, and once folded it is indistinguishable from a real low tone. That is why every recorder removes high frequencies with a filter before it samples.',
+ wheel:'The same illusion with your eyes. Film runs at 24 frames a second; a wheel turning a little less than a whole revolution per frame looks as if it has turned slightly backwards. Sound sampling and film are the same mathematics: a fast thing, photographed too rarely, is mistaken for a slow one.',
+ bits:'Few bits means few levels, so every sample is rounded to one of a handful of steps. The rounding error is heard as a gritty hiss riding on the tone. Each extra bit doubles the number of levels and cuts the noise by about 6 dB.',
+ cd:'Human hearing stops around 20,000 Hz, so the rate must be over 40,000: 44,100 leaves room for the filter that removes everything above 20,000 before sampling. 16 bits gives 65,536 levels, quiet enough that the rounding hiss sits below most listening rooms. Together: 176 kilobytes every second, which is why compression came next.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join(''); }
+['#f','#fs','#bits'].forEach(id=>$(id).addEventListener('input',()=>{ if(!sweeping){ readSliders(); draw(); } }));
+const setS=(id,val,a,b)=>{ $(id).value=Math.round(1000*Math.log(val/a)/Math.log(b/a)); };
+$('#cd').onclick=()=>{ setS('#fs',44100,SMIN,SMAX); $('#bits').value=16; readSliders(); fs=44100; draw(); find('cd'); };
+$('#phone').onclick=()=>{ setS('#fs',8000,SMIN,SMAX); $('#bits').value=8; readSliders(); fs=8000; draw(); };
+$('#play').onclick=()=>play('tone'); $('#sweep').onclick=()=>play('sweep'); $('#chord').onclick=()=>play('chord'); $('#stop').onclick=stop;
+readSliders(); draw(); requestAnimationFrame(drawWheel);
+</script>

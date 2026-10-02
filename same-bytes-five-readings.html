@@ -1,0 +1,121 @@
+<meta charset="utf-8">
+<!-- E12 · Same Bytes, Five Readings — Switches All the Way Down, Chapter 12 -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--night:#1B1446;--night2:#2A2066;--night3:#3A2E8A;--ink:#14123A;--pink:#FF2E88;--cyan:#00C2FF;--sun:#FFC700;--green:#00C48C;--orange:#FF6B00;--soft:#C9C4F2;--violet:#B388FF}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#fff;font-family:Barlow,system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1220px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+header{grid-column:1/-1}
+h1{font-size:34px;margin:0;font-weight:800} h1 span{color:var(--sun)}
+header p{margin:4px 0 0;color:var(--soft);max-width:80ch}
+h2{font-size:16px;margin:0 0 8px;font-weight:800}
+.panel{background:var(--night2);border-radius:12px;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-weight:700;font-size:14px;border:none;border-radius:6px;padding:7px 12px;cursor:pointer;background:var(--night3);color:#fff}
+.btn.on{background:var(--sun);color:var(--ink)}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.bytes{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+.byte{background:#fff;color:var(--ink);border-radius:8px;padding:6px;text-align:center;cursor:pointer}
+.byte.hl{outline:4px solid var(--pink)}
+.byte input{width:100%;font-family:"JetBrains Mono",monospace;font-size:20px;font-weight:700;border:none;text-align:center;background:transparent;color:var(--ink)}
+.byte small{font-family:"JetBrains Mono",monospace;font-size:10px;color:#6a63a8;display:block}
+.readings{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rd{background:var(--night2);border-radius:12px;padding:12px;border-top:6px solid}
+.cells{display:flex;flex-wrap:wrap;gap:5px}
+.cell{background:var(--night3);border-radius:6px;padding:5px 8px;font-family:"JetBrains Mono",monospace;font-size:15px;cursor:default}
+.cell.hl{outline:3px solid var(--pink)}
+.cell small{display:block;font-size:10px;color:var(--soft)}
+canvas{border-radius:6px;image-rendering:pixelated}
+.note{background:var(--green);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.q{background:var(--night3);border-radius:8px;padding:9px 11px;margin-bottom:7px;border-left:4px solid var(--sun);font-size:14px}
+.q.done{border-left-color:var(--green)}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}.readings{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+<header>
+  <h1>Same bytes, <span>five readings</span></h1>
+  <p>Sixteen bytes. Nothing else. Below them, the same bytes read five different ways at once: as whole numbers, as text, as a decimal number, as a picture, and as instructions for the Bench Computer. Change any byte and every reading changes. Which one is the true meaning?</p>
+</header>
+<main style="display:flex;flex-direction:column;gap:14px">
+  <section class="panel">
+    <div class="bar" style="margin-bottom:8px"><span style="color:var(--soft)">Load:</span><span id="presets"></span></div>
+    <div class="bytes" id="bytes"></div>
+    <div class="bar" style="margin-top:10px"><span style="color:var(--soft)">Byte order for multi-byte numbers:</span><button class="btn on" id="le">Little-endian (most PCs and phones)</button><button class="btn" id="be">Big-endian (networks)</button></div>
+  </section>
+  <div class="readings">
+    <section class="rd" style="border-color:var(--cyan)"><h2>1 · Whole numbers <span id="intmode" style="font-weight:400;font-size:13px"></span></h2><div class="bar" style="margin-bottom:6px"><button class="btn on" data-iw="2">16-bit</button><button class="btn" data-iw="4">32-bit</button><button class="btn" data-sg="1">signed</button></div><div class="cells" id="ints"></div></section>
+    <section class="rd" style="border-color:var(--pink)"><h2>2 · Text (ASCII / UTF-8)</h2><div class="cells" id="text"></div></section>
+    <section class="rd" style="border-color:var(--sun)"><h2>3 · Decimal numbers (floating point)</h2><div class="bar" style="margin-bottom:6px"><button class="btn on" data-fw="8">64-bit double</button><button class="btn" data-fw="4">32-bit float</button></div><div class="cells" id="floats"></div></section>
+    <section class="rd" style="border-color:var(--green)"><h2>4 · A picture</h2><div class="bar" style="margin-bottom:6px"><button class="btn on" data-px="g">4 × 4 grey</button><button class="btn" data-px="c">5 colour pixels</button></div><canvas id="pix" width="4" height="4" style="width:180px;height:180px"></canvas></section>
+    <section class="rd" style="border-color:var(--violet);grid-column:1/-1"><h2>5 · Instructions for the Bench Computer</h2><div class="cells" id="instr"></div>
+      <p style="font-size:13px;color:var(--soft);margin:6px 0 0">Top four bits: which instruction (LDA, ADD, SUB, STA, LDI, JMP, JC, JZ, OUT, HLT). Bottom four: the address or number it works on.</p></section>
+  </div>
+</main>
+<aside class="panel" style="align-self:start;position:sticky;top:12px"><h2>Things to find</h2><div id="qs"></div><div id="note"></div></aside>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+let B=[...new TextEncoder().encode('Hello, world!!!!')], little=true, iw=2, signedI=false, fw=8, px='g', hl=-1, seen={};
+const PRESETS={
+ 'Text':()=>[...new TextEncoder().encode('Hello, world!!!!')],
+ 'π as a double':()=>{ const d=new DataView(new ArrayBuffer(16)); d.setFloat64(0,Math.PI,true); d.setFloat64(8,-2.5,true); return [...new Uint8Array(d.buffer)]; },
+ 'A picture':()=>[0,60,60,0,60,255,255,60,60,255,255,60,0,60,60,0],
+ 'A program':()=>[0x1E,0x2F,0xE0,0xF0,0,0,0,0,0,0,0,0,0,0,28,14],
+ 'Numbers 1–8':()=>{ const d=new DataView(new ArrayBuffer(16)); for(let i=0;i<8;i++) d.setUint16(i*2,i+1,true); return [...new Uint8Array(d.buffer)]; },
+ 'Random':()=>B.map(()=>Math.random()*256|0)};
+$('#presets').innerHTML=Object.keys(PRESETS).map(k=>`<button class="btn" data-p="${k}">${k}</button>`).join('');
+$('#presets').onclick=e=>{ const b=e.target.closest('[data-p]'); if(b){ B=PRESETS[b.dataset.p](); lastPreset=b.dataset.p; render(); if(lastPreset==='Text') find('both'); } };
+let lastPreset='Text';
+const hex=v=>v.toString(16).toUpperCase().padStart(2,'0');
+const OPN={0:'NOP',1:'LDA',2:'ADD',3:'SUB',4:'STA',5:'LDI',6:'JMP',7:'JC',8:'JZ',14:'OUT',15:'HLT'}, ARG=new Set([1,2,3,4,5,6,7,8]);
+function group(w){ const out=[]; for(let i=0;i<16;i+=w) out.push([...Array(w)].map((_,k)=>i+k)); return out; }
+function render(){
+  $('#bytes').innerHTML=B.map((v,i)=>`<div class="byte ${hl===i?'hl':''}" data-i="${i}"><small>byte ${i}</small><input value="${hex(v)}" maxlength="2" data-i="${i}" aria-label="byte ${i} in hex"><small>${v.toString(2).padStart(8,'0')}</small></div>`).join('');
+  const dv=new DataView(new Uint8Array(B).buffer);
+  const cell=(idx,main,sub)=>`<div class="cell ${idx.includes(hl)?'hl':''}" data-idx="${idx.join(',')}">${main}${sub!=null?`<small>${sub}</small>`:''}</div>`;
+  $('#ints').innerHTML=group(iw).map(g=>{ const v=iw===2?(signedI?dv.getInt16(g[0],little):dv.getUint16(g[0],little)):(signedI?dv.getInt32(g[0],little):dv.getUint32(g[0],little)); return cell(g,v.toLocaleString(),`bytes ${g[0]}–${g[g.length-1]}`); }).join('');
+  $('#intmode').textContent=signedI?'(signed)':'(unsigned)';
+  $('#text').innerHTML=B.map((v,i)=>cell([i],v>=32&&v<127?(v===32?'␣':String.fromCharCode(v)):'·',v<32?'control':v>=127?'not ASCII':hex(v))).join('');
+  $('#floats').innerHTML=group(fw).map(g=>{ const v=fw===8?dv.getFloat64(g[0],little):dv.getFloat32(g[0],little); return cell(g,isNaN(v)?'NaN':Math.abs(v)>1e15||(v!==0&&Math.abs(v)<1e-6)?v.toExponential(4):+v.toPrecision(8),`bytes ${g[0]}–${g[g.length-1]}`); }).join('');
+  const cv=$('#pix'), g=cv.getContext('2d');
+  if(px==='g'){ cv.width=4; cv.height=4; const im=g.createImageData(4,4); B.forEach((v,i)=>{ im.data.set([v,v,v,255],i*4); }); g.putImageData(im,0,0); }
+  else { cv.width=5; cv.height=1; const im=g.createImageData(5,1); for(let p=0;p<5;p++) im.data.set([B[p*3],B[p*3+1],B[p*3+2],255],p*4); g.putImageData(im,0,0); cv.style.height='36px'; }
+  if(px==='g') cv.style.height='180px';
+  $('#instr').innerHTML=B.map((v,i)=>{ const op=OPN[v>>4]; return cell([i],op?`${op}${ARG.has(v>>4)?' '+(v&15):''}`:'???',`cell ${i}`); }).join('');
+  checkFinds();
+}
+function checkFinds(){
+  const txt=B.every(v=>v>=32&&v<127), prog=B.slice(0,4).every(v=>OPN[v>>4]);
+  if(lastPreset==='A program') find('prog');
+  if(lastPreset==='π as a double'&&!little) find('endian');
+  if(lastPreset==='A picture'&&px==='g') find('pic');
+}
+$('#bytes').addEventListener('input',e=>{ const i=+e.target.dataset.i, v=parseInt(e.target.value,16); if(!isNaN(v)&&e.target.value.length===2){ B[i]=v; lastPreset=''; render(); const n=$(`#bytes input[data-i="${Math.min(15,i+1)}"]`); n.focus(); n.select(); find('edit'); } });
+$('#bytes').addEventListener('pointerover',e=>{ const d=e.target.closest('[data-i]'); if(d&&+d.dataset.i!==hl){ hl=+d.dataset.i; renderHL(); } });
+document.querySelector('main').addEventListener('pointerover',e=>{ const c=e.target.closest('[data-idx]'); if(c){ const i=+c.dataset.idx.split(',')[0]; if(i!==hl){ hl=i; renderHL(); } } });
+function renderHL(){ document.querySelectorAll('.byte').forEach(b=>b.classList.toggle('hl',+b.dataset.i===hl)); document.querySelectorAll('[data-idx]').forEach(c=>c.classList.toggle('hl',c.dataset.idx.split(',').map(Number).includes(hl))); }
+$('#le').onclick=()=>{ little=true; $('#le').classList.add('on'); $('#be').classList.remove('on'); render(); };
+$('#be').onclick=()=>{ little=false; $('#be').classList.add('on'); $('#le').classList.remove('on'); render(); };
+document.querySelector('.readings').addEventListener('click',e=>{ const b=e.target.closest('.btn'); if(!b) return;
+  if(b.dataset.iw){ iw=+b.dataset.iw; b.parentNode.querySelectorAll('[data-iw]').forEach(x=>x.classList.toggle('on',x===b)); }
+  if(b.dataset.sg){ signedI=!signedI; b.classList.toggle('on',signedI); }
+  if(b.dataset.fw){ fw=+b.dataset.fw; b.parentNode.querySelectorAll('[data-fw]').forEach(x=>x.classList.toggle('on',x===b)); }
+  if(b.dataset.px){ px=b.dataset.px; b.parentNode.querySelectorAll('[data-px]').forEach(x=>x.classList.toggle('on',x===b)); }
+  render(); });
+const FINDS=[
+ ['prog','Load “A program”. Now look at what the same bytes are as text and as a picture.'],
+ ['endian','Load “π as a double”, then switch to big-endian.'],
+ ['pic','Load “A picture”. What do the other four readings make of it?'],
+ ['edit','Type a new byte in hex (two characters, 0–9 and A–F).'],
+ ['both','Load “Text” (after trying another preset) and read “Hello, world” as instructions. Could it run?']];
+const TELL={
+ prog:'LDA 14, ADD 15, OUT, HLT: the program from the Workbench. Read as text it is mostly unprintable; as a picture it is a few grey squares. And look at cell 14: the number 28 reads equally well as the instruction LDA 12. Nothing in the bytes says which. The machine decides by what it does with them: if the program counter fetches a byte, it is an instruction.',
+ endian:'The same eight bytes, read in the opposite order, give a completely different number. Little-endian machines store the least significant byte first; networks send the most significant first. Every program that reads data from another machine has to know which, and forgetting is a classic bug.',
+ pic:'As numbers they are 0s, 60s and 255s; as text, mostly nonsense; as a double, a meaningless value; as instructions, a jumble of NOPs and jumps. Only one reader gets a picture out of them. A file’s name, like photo.png, is just a note telling your computer which reader to use.',
+ edit:'Two hex characters are one byte: each character stands for four bits. Hexadecimal is used because it lines up exactly with bits, which decimal does not.',
+ both:'Every printable character, from space (0x20) to tilde (0x7E), starts with four bits between 2 and 7, and on this machine those are all real instructions: ADD, SUB, STA, LDI, JMP, JC. So “Hello, world” is a valid program. It would do something meaningless, but the machine would run it without complaint. Text that is also machine code is not a curiosity: attackers have written real programs out of printable characters to slip them past filters that only let text through.'};
+function find(id){ if(seen[id]) return; seen[id]=1; $('#note').innerHTML=`<div class="note">${TELL[id]}</div>`; renderQs(); }
+function renderQs(){ $('#qs').innerHTML=FINDS.map(([id,t])=>`<div class="q ${seen[id]?'done':''}">${seen[id]?'✓ ':''}${t}</div>`).join('')+'<p style="font-size:13px;color:var(--soft)">Point at any byte to see where it appears in every reading.</p>'; }
+render(); renderQs();
+</script>
